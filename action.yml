@@ -26,7 +26,7 @@ runs:
     run: echo "Hello world"
     shell: bash
   - name: Get dependencies
-    run: 'npm update'
+    run: 'npm install'
     shell: bash
   - name: Run script
     run: 'node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z {{ inputs.zib-release }} -v ${{ inputs.fhir-version }} -r $ {{inputs.restrict-missing }} -l ${{ inputs.allow-level }} -f text ${{ inputs.structuredefinitions }}'
