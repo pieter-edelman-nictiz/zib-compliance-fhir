@@ -23,7 +23,7 @@ runs:
   using: 'composite'
   steps:
   - name: Get dependencies
-    run: npm install --prefix ${{ github.action_path }} > /dev/null
+    run: npm install --prefix ${{ github.action_path }} > /dev/null 2> /dev/null
     shell: bash
   - name: Run script
     run: 'node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z ${{ inputs.zib-release }} -v ${{ inputs.fhir-version }} -r ${{inputs.restrict-missing }} -l ${{ inputs.allow-level }} -f text ${{ inputs.structuredefinitions }}'
