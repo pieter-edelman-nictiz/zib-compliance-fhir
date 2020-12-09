@@ -22,6 +22,9 @@ inputs:
 runs:
   using: 'composite'
   steps:
+  - name: Echo
+    run: echo "Hello world"
+    shell: bash
   - name: Get dependencies
     run: 'npm update'
     shell: bash
