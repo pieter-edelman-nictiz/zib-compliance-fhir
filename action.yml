@@ -22,7 +22,9 @@ inputs:
 runs:
   using: 'composite'
   steps:
-  - run: 'npm update'
+  - name: Get dependencies
+    run: 'npm update'
     shell: bash
-  - run: 'node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z {{ inputs.zib-release }} -v ${{ inputs.fhir-version }} -r $ {{inputs.restrict-missing }} -l ${{ inputs.allow-level }} -f text ${{ inputs.structuredefinitions }}'
+  - name: Run script
+    run: 'node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z {{ inputs.zib-release }} -v ${{ inputs.fhir-version }} -r $ {{inputs.restrict-missing }} -l ${{ inputs.allow-level }} -f text ${{ inputs.structuredefinitions }}'
     shell: bash
