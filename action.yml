@@ -22,12 +22,9 @@ inputs:
 runs:
   using: 'composite'
   steps:
-  - name: Echo
-    run: echo "Hello world"
-    shell: bash
   - name: Get dependencies
     run: npm install --prefix ${{ github.action_path }}
     shell: bash
   - name: Run script
-    run: 'node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z ${{ inputs.zib-release }} -v ${{ inputs.fhir-version }} -r ${{inputs.restrict-missing }} -l ${{ inputs.allow-level }} -f text ${{ github.action_path }}/${{ inputs.structuredefinitions }}'
+    run: 'node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z ${{ inputs.zib-release }} -v ${{ inputs.fhir-version }} -r ${{inputs.restrict-missing }} -l ${{ inputs.allow-level }} -f text ${{ inputs.structuredefinitions }}'
     shell: bash
