@@ -1,0 +1,28 @@
+name: 'FHIR-zib compliance'
+description: 'Check FHIR profile compliance to the zibs'
+inputs:
+    max-file:
+      description: 'Path to .max file'
+      required: true
+    structuredefinitions:
+      description: 'A glob to the structuredefinition files to check'
+      required: true
+    zib-release:
+      description: 'The zib release to check mappings for'
+      required: true
+    fhir-version:
+      description: 'The FHIR version to use (the "fhirVersion" element in the structuredefinitions will be ignored).\nIf the version is STU3, the definitions should be present in the "definitions" folder.'
+      default: 'R4'
+    restrict-missing:
+      description: 'Restrict the check for missing arguments to the zibs that have been mapped to the provided profiles'
+      default: true
+    allow-level:
+      description: 'A number from 0-2 to indicate at which level errors are still allowed (0=error, 1=warning, 2=allow all). If errors below the specified level occur, this script will exit with a non-zero status.'
+      default: 1
+runs:
+  using: 'composite'
+  steps:
+  - run: 'npm update'
+    shell: bash
+  - run: 'node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z {{ inputs.zib-release }} -v ${{ inputs.fhir-version }} -r $ {{inputs.restrict-missing }} -l ${{ inputs.allow-level }} -f text ${{ inputs.structuredefinitions }}'
+    shell: bash
