@@ -31,5 +31,5 @@ runs:
     id: set_options
     shell: bash
   - name: Run script
-    run: 'node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z ${{ inputs.zib-release }} -v ${{ inputs.fhir-version }} -r ${{inputs.restrict-missing }} -l ${{ inputs.allow-level }} -f text ${{ inputs.structuredefinitions }}' ${{ steps.set_options.opt_zib_deviations }}
+    run: 'node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z ${{ inputs.zib-release }} -v ${{ inputs.fhir-version }} -r ${{inputs.restrict-missing }} -l ${{ inputs.allow-level }} ${{ steps.set_options.opt_zib_deviations }} -f text ${{ inputs.structuredefinitions }}'
     shell: bash
