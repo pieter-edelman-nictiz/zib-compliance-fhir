@@ -19,12 +19,17 @@ inputs:
     allow-level:
       description: 'A number from 0-2 to indicate at which level errors are still allowed (0=error, 1=warning, 2=allow all). If errors below the specified level occur, this script will exit with a non-zero status.'
       default: 1
+    zib-deviations:
+      description: 'A YAML file describing, with reason, where the profile may deviate from the zib.'
 runs:
   using: 'composite'
   steps:
   - name: Get dependencies
     run: npm install --prefix ${{ github.action_path }} > /dev/null 2> /dev/null
     shell: bash
+  - run: echo "::set-output name=opt_zib_deviations::$(if [ ! -z ${{inputs.zib-deviations}} ]; then echo --zib-deviations=${{ inputs.zib-deviations }};fi)"
+    id: set_options
+    shell: bash
   - name: Run script
-    run: 'node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z ${{ inputs.zib-release }} -v ${{ inputs.fhir-version }} -r ${{inputs.restrict-missing }} -l ${{ inputs.allow-level }} -f text ${{ inputs.structuredefinitions }}'
+    run: 'node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z ${{ inputs.zib-release }} -v ${{ inputs.fhir-version }} -r ${{inputs.restrict-missing }} -l ${{ inputs.allow-level }} -f text ${{ inputs.structuredefinitions }}' ${{ steps.set_options.opt_zib_deviations }}
     shell: bash
