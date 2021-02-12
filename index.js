@@ -264,11 +264,11 @@ argv.files.forEach(filename => {
                                     reportLine.fhir_alias = elementAlias;
                                     reportLine.fhir_alias_warn = (elementAlias.indexOf(conceptName) == -1)?"WARN":"OK";
 
+                                    let conceptDt = zibOverrides.check(resource.id, element.id, "datatype");
                                     if (concept.datatype) {
                                         var fhirDt = (element.type?element.type[0].code:undefined);
                                         var compatible;
-                                        let conceptDt = zibOverrides.check(resource.id, element.id, "datatype");
-                                        if ("conceptDatatype" == null) {
+                                        if (conceptDt == null) {
                                             conceptDt = concept.datatype;
                                         }
                                         if (conceptDt == fhirDt) compatible = "OK";
@@ -303,18 +303,24 @@ argv.files.forEach(filename => {
                                         var tag2 = concept.tag.find(tag => tag.$.name === 'DCM::ReferencedDefinitionCode');
                                         var fhirDt = (element.type?element.type[0].code:undefined);
                                         reportLine.fhir_datatype = fhirDt;
-                                        if (tag1 || tag2) {
-                                            reportLine.zib_datatype = "reference";
-                                            reportLine.fhir_datatype_error = (fhirDt != "Reference")?"WARN":"OK";
+                                        if (conceptDt == null) {
+                                            if (tag1 || tag2) {
+                                                conceptDt = "Reference";
+                                            } else {
+                                                conceptDt = concept.stereotype;
+                                            }
                                         }
-                                        else {
-                                            reportLine.zib_datatype = concept.stereotype;
+                                        reportLine.zib_datatype = conceptDt;
+                                        if (conceptDt == "Reference") {
+                                            reportLine.fhir_datatype_error = (fhirDt != "Reference")?"WARN":"OK";
+                                        } else {
                                             var fhir_datatype_error;
                                             if (fhirDt == "Extension") reportLine.fhir_datatype_error = "CHECK Extension";
-                                            else if (reportLine.zib_datatype == 'container' && fhirDt == "Reference") fhir_datatype_error = "OK";
-                                            else if (reportLine.zib_datatype == 'container' && fhirDt == undefined) fhir_datatype_error = "OK";
-                                            else if (reportLine.zib_datatype == 'rootconcept' && fhirDt == undefined) fhir_datatype_error = "OK";
-                                            else if (reportLine.zib_datatype == 'rootconcept' && fhirDt != undefined) fhir_datatype_error = "WARN";
+                                            else if (conceptDt == 'container' && fhirDt == "Reference") fhir_datatype_error = "OK";
+                                            else if (conceptDt == 'container' && fhirDt == undefined) fhir_datatype_error = "OK";
+                                            else if (conceptDt == 'rootconcept' && fhirDt == undefined) fhir_datatype_error = "OK";
+                                            else if (conceptDt == 'rootconcept' && fhirDt != undefined) fhir_datatype_error = "WARN";
+                                            else if (conceptDt == fhirDt) fhir_datatype_error = "OK"; // When the datatype is manually overridden
                                             else fhir_datatype_error = "ERROR";
                                             reportLine.fhir_datatype_error = fhir_datatype_error;
                                         }
