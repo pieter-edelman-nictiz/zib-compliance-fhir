@@ -24,12 +24,34 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    - name: Check for input
+      run: |
+      do_run=false
+      for source in ${{inputs.structuredefinitions}}; do 
+        if [[ -f $source ]]; then
+          do_run=true
+        fi
+      done
+      if $do_run; then
+        echo "::set-output name=run::run"
+      else
+        echo "No StructureDefinitions to check, skipping"
+        echo "::set-output name=run::"
+      fi
+    id: check_run
+    shell: bash
   - name: Get dependencies
-    run: npm install --prefix ${{ github.action_path }} > /dev/null 2> /dev/null
+    run: |
+      if [ ${{ steps.check_run.outputs.run }} ]; then
+        npm install --prefix ${{ github.action_path }} > /dev/null 2> /dev/null
+      fi
     shell: bash
   - run: echo "::set-output name=opt_zib_deviations::$(if [ ! -z ${{inputs.zib-deviations}} ]; then echo --zib-deviations=${{ inputs.zib-deviations }};fi)"
     id: set_options
     shell: bash
   - name: Run script
-    run: 'node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z ${{ inputs.zib-release }} -v ${{ inputs.fhir-version }} -r ${{inputs.restrict-missing }} --fail-at ${{ inputs.fail-at }} ${{ steps.set_options.opt_zib_deviations }} -f text ${{ inputs.structuredefinitions }}'
+    run: |
+      if [ ${{ steps.check_run.outputs.run }} ]; then
+        'node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z ${{ inputs.zib-release }} -v ${{ inputs.fhir-version }} -r ${{inputs.restrict-missing }} --fail-at ${{ inputs.fail-at }} ${{ steps.set_options.opt_zib_deviations }} -f text ${{ inputs.structuredefinitions }}'
+      fi
     shell: bash
