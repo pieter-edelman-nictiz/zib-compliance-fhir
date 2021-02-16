@@ -118,9 +118,19 @@ zibs.model.objects[0].object.forEach(object => {
                 object.cardinality = "0..1";
             }
             else if (relCard) {
-                var card = relCard.sourceCard;
+                var card = relCard.sourceCard[0];
                 if (card == "1") card = "1..1";
-                object.cardinality = card;
+                
+                // Zibs define a "conceptual" cardinality, meaning that they define the concepts that are conceptually
+                // present, although in practice they may be absent in practical use cases. To facilitate this, the
+                // FHIR min cardinality for zib profiles must be one less than the zib cardinality. See
+                // https://zibs.nl/wiki/Zib_kardinaliteiten for more information. 
+                let minAndMax = card.split("..");
+                let min = Number(minAndMax[0]);
+                if (min > 0) {
+                    min -= 1;
+                }
+                object.cardinality = `${min}..${minAndMax[1]}`;
             }
         }
     }
