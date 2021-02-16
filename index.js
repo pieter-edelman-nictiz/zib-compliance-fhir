@@ -338,7 +338,11 @@ argv.files.forEach(filename => {
                                     if (concept.cardinality) {
                                         let zibCard = zibOverrides.check(resource.id, element.id, "cardinality");
                                         if (zibCard == null) {
-                                            zibCard = concept.cardinality;
+                                            if (element.id.split(".").length == 1) { // Root element cannot have another cardinality than 0..*, so ignore the zib cardinality here
+                                                zibCard = "0..*";
+                                            } else {
+                                                zibCard = concept.cardinality;
+                                            }
                                         }
                                         var fhirCard = element.min + ".." + element.max;
                                         reportLine.zib_card = zibCard;
