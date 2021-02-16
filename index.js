@@ -259,12 +259,14 @@ argv.files.forEach(filename => {
                                     var elementShort = element.short.toString();
                                     var conceptAliasEn = zibOverrides.check(resource.id, element.id, "short")
                                     if (conceptAliasEn == null) {
-                                        conceptAliasEn = concept.alias[0].substring(3).trim();
+                                        // Cut of "EN: ", and cut off the part after "::" if it is a reference
+                                        conceptAliasEn = concept.alias[0].substring(3).trim().split("::")[0]
                                     }
                                     var elementAlias = element.alias?element.alias.toString():'';
                                     var conceptName = zibOverrides.check(resource.id, element.id, "alias")
                                     if (conceptName == null) {
-                                        conceptName = concept.name.toString();
+                                        // Cut of the part after "::" if it is a reference
+                                        conceptName = concept.name.toString().split("::")[0];
                                     }
 
                                     reportLine.zib_alias_en = conceptAliasEn;
