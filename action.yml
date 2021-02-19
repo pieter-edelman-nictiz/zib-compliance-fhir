@@ -52,6 +52,6 @@ runs:
     - name: Run script
       run: |
         if [ ${{ steps.check_run.outputs.run }} ]; then
-          'node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z ${{ inputs.zib-release }} -v ${{ inputs.fhir-version }} -r ${{inputs.restrict-missing }} --fail-at ${{ inputs.fail-at }} ${{ steps.set_options.opt_zib_deviations }} -f text ${{ inputs.structuredefinitions }}'
+          node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z ${{ inputs.zib-release }} -v ${{ inputs.fhir-version }} -r ${{inputs.restrict-missing }} --fail-at ${{ inputs.fail-at }} ${{ steps.set_options.opt_zib_deviations }} -f text ${{ inputs.structuredefinitions }}
         fi
       shell: bash
