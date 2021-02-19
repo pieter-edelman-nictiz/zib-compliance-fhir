@@ -256,25 +256,24 @@ argv.files.forEach(filename => {
                                         fhir_path     : element.id
                                     };
 
-                                    var elementShort = element.short.toString();
-                                    var conceptAliasEn = zibOverrides.check(resource.id, element.id, "short")
-                                    if (conceptAliasEn == null) {
-                                        // Cut of "EN: ", and cut off the part after "::" if it is a reference
-                                        conceptAliasEn = concept.alias[0].substring(3).trim().split("::")[0]
+                                    var fhirShort = element.short.toString();
+                                    var conceptNameEN = zibOverrides.check(resource.id, element.id, "short")
+                                    if (conceptNameEN == null) {
+                                        conceptNameEN = constructConceptNameEN(element);
                                     }
-                                    var elementAlias = element.alias?element.alias.toString():'';
-                                    var conceptName = zibOverrides.check(resource.id, element.id, "alias")
-                                    if (conceptName == null) {
+                                    var fhirAlias = element.alias?element.alias.toString():'';
+                                    var conceptNameNL = zibOverrides.check(resource.id, element.id, "alias")
+                                    if (conceptNameNL == null) {
                                         // Cut of the part after "::" if it is a reference
-                                        conceptName = concept.name.toString().split("::")[0];
+                                        conceptNameNL = concept.name.toString().split("::")[0];
                                     }
 
-                                    reportLine.zib_alias_en = conceptAliasEn;
-                                    reportLine.fhir_short = elementShort;
-                                    reportLine.fhir_short_warn = (conceptAliasEn != elementShort)?"WARN":"OK";
-                                    reportLine.zib_name = conceptName;
-                                    reportLine.fhir_alias = elementAlias;
-                                    reportLine.fhir_alias_warn = (elementAlias.indexOf(conceptName) == -1)?"WARN":"OK";
+                                    reportLine.zib_alias_en = conceptNameEN;
+                                    reportLine.fhir_short = fhirShort;
+                                    reportLine.fhir_short_warn = (conceptNameEN != fhirShort)?"WARN":"OK";
+                                    reportLine.zib_name = conceptNameNL;
+                                    reportLine.fhir_alias = fhirAlias;
+                                    reportLine.fhir_alias_warn = (fhirAlias.indexOf(conceptNameNL) == -1)?"WARN":"OK";
 
                                     let conceptDt = zibOverrides.check(resource.id, element.id, "datatype");
                                     if (concept.datatype) {
@@ -511,6 +510,23 @@ function getWarnLevel(reportLine) {
     }).reduce((result, curr) => {
         return Math.min(result, curr)
     })
+}
+
+/**
+ * Return the English name for the zib concept represented by the given FHIR element. If multiple zib concepts are
+ * represented on the same element, they will be concatenated, seperated by " / ".
+ * @param {*} element 
+ */
+function constructConceptNameEN(element) {
+    let conceptNames = [];
+    element.mapping.forEach(mapping => {
+        if (zibRegEx.test(mapping.identity)) {
+            // Cut of "EN: ", and cut off the part after "::" if it is a reference
+            let conceptName = _conceptsById[mapping.map].alias[0].substring(3).trim().split("::")[0]
+            conceptNames.push(conceptName)
+        }
+    })
+    return conceptNames.join(" / ");
 }
 
 /**
