@@ -514,7 +514,7 @@ function getWarnLevel(reportLine) {
 
 /**
  * Return the English name for the zib concept represented by the given FHIR element. If multiple zib concepts are
- * represented on the same element, they will be concatenated, seperated by " / ".
+ * represented on the same element, they will be concatenated, seperated by " / " (when unique).
  * @param {*} element 
  */
 function constructConceptNameEN(element) {
@@ -526,6 +526,7 @@ function constructConceptNameEN(element) {
             conceptNames.push(conceptName)
         }
     })
+    conceptNames = [...new Set(conceptNames)];
     return conceptNames.join(" / ");
 }
 
