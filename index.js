@@ -348,9 +348,12 @@ argv.files.forEach(filename => {
                                         var fhirCard = element.min + ".." + element.max;
                                         reportLine.zib_card = zibCard;
                                         reportLine.fhir_card = fhirCard;
-                                        reportLine.fhir_card_warn = (fhirCard != zibCard)?"WARN":"OK";
-                                        // if fhir has stricter cardinality then error
-                                        if (zibCard.endsWith("..*")) reportLine.fhir_card_warn = "ERROR";
+                                        if (fhirCard != zibCard) {
+                                            // if fhir has stricter cardinality then error
+                                            reportLine.fhir_card_warn = (zibCard.endsWith("..*")) ? "ERROR" : "WARN";
+                                        } else {
+                                            reportLine.fhir_card_warn = "OK";
+                                        }
                                     }
                                     report(reportLineToXml, reportLineToText, reportLine);
                                     lowestWarnLevel = Math.min(lowestWarnLevel, getWarnLevel(reportLine));
