@@ -349,8 +349,8 @@ argv.files.forEach(filename => {
                                         reportLine.zib_card = zibCard;
                                         reportLine.fhir_card = fhirCard;
                                         reportLine.fhir_card_warn = (fhirCard != zibCard)?"WARN":"OK";
-                                        // if fhir has strickter cardinality then error
-                                        if ((concept.cardinality == '0..*' || concept.cardinality == '1..*') && element.max == '1') reportLine.fhir_card_warn = "ERROR";
+                                        // if fhir has stricter cardinality then error
+                                        if (zibCard.endsWith("..*")) reportLine.fhir_card_warn = "ERROR";
                                     }
                                     report(reportLineToXml, reportLineToText, reportLine);
                                     lowestWarnLevel = Math.min(lowestWarnLevel, getWarnLevel(reportLine));
