@@ -40,7 +40,7 @@ const argv = yargs
         choices: ['error', 'warning'],
         default: 'error'
     }).option('zib-overrides', {
-        description: 'YAML file specifying zib concepts that are purposefully not mapped faithfully to the profiles. This file should look like:\n\n>  [resource id]:\n>    zib deviations:\n>      [element id]:\n>        - [deviation]: [value]\n>          reason: [Explanation for deviation]\n\nWhere [deviation] can be "cardinality", "datatype", "short" or "alias". For each element, multiple deviations may be specified. Note that for each deviation, a reason *must* be provided.',
+        description: 'YAML file specifying zib concepts that are purposefully not mapped faithfully to the profiles. This file should look like:\n\n>  [resource id]:\n>    zib deviations:\n>      [element id]:\n>        - [deviation]: [value]\n>          reason: [Explanation for deviation]\n>  unmapped zib concepts:\n>    - [zib concept id]: [zib concept name]\n>      reason: [Explanation for not mapping]\n\nWhere [deviation] can be "cardinality", "datatype", "short" or "alias". For each element, multiple deviations may be specified. Note that for each deviation, a reason *must* be provided.',
         type: 'string'
     }).option('output-format', {
         alias: 'f',
@@ -179,6 +179,30 @@ class ZibOverrides {
             }
         }
         return overridden
+    }
+
+    /**
+     * Check if the zib concept id is registered under "unmapped zib concepts".
+     * 
+     * @param {string} zibId - the zib concept id to check.
+     * @returns {boolean}
+     */
+    hasUnmapped(zibId) {
+        if (this.overrides == null) return null
+
+        let is_unmapped = false;
+        if ("unmapped zib concepts" in this.overrides) {
+            this.overrides["unmapped zib concepts"].forEach(unmapped => {
+                if (zibId in unmapped) {
+                    if (!("reason" in unmapped)) {
+                        console.error(`Missing reason for unmapped '${zibId}'`)
+                        process.exit(1);
+                    }
+                    is_unmapped = true;
+                }
+            })
+        }
+        return is_unmapped;
     }
 }
 var zibOverrides = new ZibOverrides(argv["zib-overrides"]);
@@ -376,7 +400,7 @@ report("</report>");
 Object.keys(_conceptsById).forEach(zibId => {
     if (_zibIdsMapped.indexOf(zibId) == -1) {
         // ignore containers and rootconcepts
-        if (_conceptsById[zibId].stereotype != "container" && _conceptsById[zibId].stereotype != "rootconcept") {
+        if (!zibOverrides.hasUnmapped(zibId) && (_conceptsById[zibId].stereotype != "container" && _conceptsById[zibId].stereotype != "rootconcept")) {
             
             let cmPrefix = getCMPrefix(zibId)
             if (!argv.r || cmPrefixes.has(cmPrefix)) { // If the -r flag is set, only report from zibs that are in the supplied profiles
