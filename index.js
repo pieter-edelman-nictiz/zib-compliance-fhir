@@ -301,7 +301,12 @@ argv.files.forEach(filename => {
 
                                     let conceptDt = zibOverrides.check(resource.id, element.id, "datatype");
                                     if (concept.datatype) {
-                                        var fhirDt = (element.type?element.type[0].code:undefined);
+                                        let fhirDt = undefined;
+                                        if (element.type) {
+                                            fhirDt = element.type[0].code;
+                                        } else if (element.id.indexOf(".") == -1 && ["primitive-type", "complex-type"].includes(resource.kind)) { // Root element of datatype profile
+                                            fhirDt = resource.type;
+                                        }
                                         var compatible;
                                         if (conceptDt == null) {
                                             conceptDt = concept.datatype;
