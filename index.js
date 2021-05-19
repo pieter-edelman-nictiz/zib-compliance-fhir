@@ -313,7 +313,7 @@ argv.files.forEach(filename => {
                                         }
                                         if (conceptDt == fhirDt) compatible = "OK";
                                         else if (concept.datatype == 'II' && fhirDt == "Identifier") compatible = "OK";
-                                        else if (concept.datatype == 'ST' && fhirDt == "string") compatible = "OK";
+                                        else if (concept.datatype == 'ST' && ["string", "markdown"].includes(fhirDt)) compatible = "OK";
                                         else if (concept.datatype == 'ST' && fhirDt == "Annotation") compatible = "OK";
                                         else if (concept.datatype == 'PQ' && fhirDt == "Duration") compatible = "OK";
                                         else if (concept.datatype == 'PQ' && fhirDt == "Quantity") compatible = "OK";
