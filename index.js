@@ -471,16 +471,16 @@ function reportLineToXml(report) {
 function reportLineToText(report) {
     let lines = []
     if (report.fhir_short_warn != 'OK') {
-        lines.push(`        short:       ${report.fhir_short_warn} (${report.zib_alias_en}/${report.fhir_short})`)
+        lines.push(`        short:       ${report.fhir_short_warn} ('${report.fhir_short}' instead of '${report.zib_alias_en}')`)
     }
     if (report.fhir_alias_warn != 'OK') {
-        lines.push(`        alias:       ${report.fhir_alias_warn} (${report.zib_name}/${report.fhir_alias})`)
+        lines.push(`        alias:       ${report.fhir_alias_warn} ('${report.fhir_alias}' instead of '${report.zib_name}')`)
     }
     if (report.fhir_datatype_error != 'OK') {
-        lines.push(`        datatype:    ${report.fhir_datatype_error} (${report.zib_datatype}/${report.fhir_datatype})`)
+        lines.push(`        datatype:    ${report.fhir_datatype_error} (${report.fhir_datatype} instead of ${report.zib_datatype})`)
     }
     if (report.fhir_card_warn != 'OK') {
-        lines.push(`        cardinality: ${report.fhir_card_warn} (${report.zib_card}/${report.fhir_card})`)
+        lines.push(`        cardinality: ${report.fhir_card_warn} (${report.fhir_card} instead of ${report.zib_card})`)
     }
     if (lines.length > 0) {
         lines = [`     == ${report.zib_concept_id} (${report.fhir_path})`].concat(lines)
