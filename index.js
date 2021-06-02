@@ -6,6 +6,9 @@ var xml2js = require('xml2js');
 const yaml = require('js-yaml');
 const yargs = require('yargs');
 
+// Unique identification string for when mappings are implicit, as described in the profiling guidelines.
+const IMPLICIT_IDENTIFIER = ' (implicit, main mapping is on '
+
 // Parse command line options and argumens
 const argv = yargs
     .option('max-file', {
@@ -262,7 +265,7 @@ argv.files.forEach(filename => {
                         if (element.mapping) {
                             // check mappings and only handle mappings to the target zib release
                             element.mapping.forEach(mapping => {
-                                if (zibRegEx.test(mapping.identity)) {
+                                if (zibRegEx.test(mapping.identity) && !mapping.comment.includes(IMPLICIT_IDENTIFIER)) {
                                     cmPrefixes.add(getCMPrefix(mapping.map))
 
                                     var zibConceptId = mapping.map;
