@@ -369,6 +369,7 @@ argv.files.forEach(filename => {
                                         }
                                     }
                                     if (concept.cardinality) {
+                                        // Get the zib cardinality, or its overridden value.
                                         let zibCard = zibOverrides.check(resource.id, element.id, "cardinality");
                                         if (zibCard == null) {
                                             if (element.id.split(".").length == 1) { // Root element cannot have another cardinality than 0..*, so ignore the zib cardinality here
@@ -377,7 +378,27 @@ argv.files.forEach(filename => {
                                                 zibCard = concept.cardinality;
                                             }
                                         }
+
+                                        // Get the cardinality of the mapped FHIR element
                                         var fhirCard = element.min + ".." + element.max;
+                                        // Handle the common case where the element is mapped onto Extension.value[x].
+                                        // In this case, the cardinality of the element itself should be combined with
+                                        // the cardinality of the extension root (eg. if .value is required but the
+                                        // extension use itself is optional, the result is that the value is optional).
+                                        let extensionCheck = element.id.match(/(.*)\.extension:([^\s\.]+)\.value\[x\]/)
+                                        if (extensionCheck && !extensionCheck[1].includes("extension:")) { // Ignore complex extensions because of co-dependencies
+                                            let extensionRootPath = extensionCheck[1] + ".extension:" + extensionCheck[2]
+                                            let extensionRoot = resource.snapshot.element.filter(element => element.id == extensionRootPath)[0]
+                                            let min = parseInt(element.min) * parseInt(extensionRoot.min)
+                                            let max
+                                            if (element.max == "*" || extensionRoot.max == "*") {
+                                                max = "*"
+                                            } else {
+                                                max = parseInt(element.max) * parseInt(extensionRoot.max)
+                                            }
+                                            fhirCard = min + ".." + max
+                                        }
+
                                         reportLine.zib_card = zibCard;
                                         reportLine.fhir_card = fhirCard;
                                         if (fhirCard != zibCard) {
