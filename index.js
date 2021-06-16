@@ -385,6 +385,7 @@ argv.files.forEach(filename => {
                                         // In this case, the cardinality of the element itself should be combined with
                                         // the cardinality of the extension root (eg. if .value is required but the
                                         // extension use itself is optional, the result is that the value is optional).
+                                        let cardinalityIsCombined = false
                                         let extensionCheck = element.id.match(/(.*)\.extension:([^\s\.]+)\.value\[x\]/)
                                         if (extensionCheck && !extensionCheck[1].includes("extension:")) { // Ignore complex extensions because of co-dependencies
                                             let extensionRootPath = extensionCheck[1] + ".extension:" + extensionCheck[2]
@@ -396,11 +397,13 @@ argv.files.forEach(filename => {
                                             } else {
                                                 max = parseInt(element.max) * parseInt(extensionRoot.max)
                                             }
-                                            fhirCard = min + ".." + max
+                                            let combinedFhirCard = min + ".." + max
+                                            cardinalityIsCombined = (combinedFhirCard != fhirCard)
+                                            fhirCard = combinedFhirCard
                                         }
 
                                         reportLine.zib_card = zibCard;
-                                        reportLine.fhir_card = fhirCard;
+                                        reportLine.fhir_card = fhirCard + (cardinalityIsCombined ? " (effective)" : "");
                                         if (fhirCard != zibCard) {
                                             // if fhir has stricter cardinality then error
                                             reportLine.fhir_card_warn = (zibCard.endsWith("..*")) ? "ERROR" : "WARN";
