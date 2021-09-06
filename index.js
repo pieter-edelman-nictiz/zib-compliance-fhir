@@ -94,6 +94,64 @@ var datatypes = {
 };
 
 /**
+ * Class to hande output to the terminal.
+ */
+class Output {
+    constructor() {
+        // Output consists of a set of lines, where each line is stored as [message, boolean indicating if this is an
+        // error or not].
+        this.lines = []
+    }
+
+    /**
+     * Add a normal line to the output
+     * @param {string} line 
+     */
+    addLine(line) {
+        this.lines.push([line, false])
+    }
+
+    /**
+     * Add an error line to the output
+     * @param {string} message 
+     */
+    addError(message) {
+        this.lines.push([message, true])
+    }
+
+    /**
+     * Add the content of another output object to this object.
+     * @param {Output} output 
+     */
+    addOutput(output) {
+        this.lines = this.lines.concat(output.lines)
+    }
+
+    /**
+     * Indicate if this object contains normal lines.
+     * @returns true if this Output object contains normal lines.
+     */
+    hasLines() {
+        return (this.lines.filter(line => line[1] == false).length > 0)
+    }
+
+    /**
+     * 
+     * @param {boolean} error_to_stderr - Indicate whether errors should be sent to stderr. If not, they are written to
+     *                                    stdout.
+     */
+    write(error_to_stderr = false) {
+        this.lines.forEach(line => {
+            if (error_to_stderr && line[1]) {
+                console.error(line[0])
+            } else {
+                console.log(line[0])
+            }
+        })
+    }
+}
+
+/**
  * Overall report for the test run, containing reports per profile and detected issues.
  */
 class Report {
@@ -125,17 +183,7 @@ class Report {
      */
     write(format) {
         this.reports.forEach(report => {
-            if (format == "xml") {
-                if (report instanceof ProfileReport) {
-                    let line, errors = report.formatXML()
-                    console.log(line)
-                    console.error(errors.join("\n"))
-                } else if (report instanceof Issue) {
-                    console.error(report.format(format))
-                }
-            } else {
-                console.log(report.format(format))
-            }
+            report.format(format).write((format == "xml") ? true : false)
         })
     }
 
@@ -219,68 +267,65 @@ class ProfileReport {
     /**
      * Format the report in the requested format.
      * @param {string} format - Either "xml" or "text"
-     * @returns The formatted string. Warning: if the format is "xml", additional errors can be returned. Use 
-     *          formatXML() to capture these as well.
+     * @returns {Output}
      */
     format(format) {
         if (format == "xml") {
-            return this.formatXML()[0]
+            return this._formatXML()
         } else {
-            return this.formatText()
+            return this._formatText()
         }
     }
 
     /**
      * Format the report as XML.
-     * @returns {[string, [string]]} - An array with the XML report as the first argument and a list of error messages
-     *                                 as the second argument.
+     * @returns {Output}
      */
-    formatXML() {
-        let line = `<structuredefinition name="${this.filename}">\n`
-        let errors = []
+    _formatXML() {
+        let output = new Output()
+        output.addLine(`<structuredefinition name="${this.filename}">`)
 
         this.reports.forEach(report => {
             if (report instanceof ElementReport) {
                 report.conceptReports.forEach(conceptReport => {
-                    line += "<line>"
-                    line += "<zib_concept_id>" + report.conceptId + "</zib_concept_id>"
-                    line += "<fhir_path>" + report.fhirPath + "</fhir_path>"
-                    line += conceptReport.format("xml")
-                    line += "<fhir_filename>" + this.filename + "</fhir_filename>"
-                    line += "<fhir_id>" + this.resourceId + "</fhir_id>"
-                    line += "</line>\n"
+                    output.addLine("<line>")
+                    output.addLine("<zib_concept_id>" + report.conceptId + "</zib_concept_id>")
+                    output.addLine("<fhir_path>" + report.fhirPath + "</fhir_path>")
+                    output.addOutput(conceptReport.format("xml"))
+                    output.addLine("<fhir_filename>" + this.filename + "</fhir_filename>")
+                    output.addLine("<fhir_id>" + this.resourceId + "</fhir_id>")
+                    output.addLine("</line>")
                 })
             } else if (report instanceof Issue) {
-                errors.push(report.format("xml"))
+                output.addOutput(report.format("xml"))
             }
         })
     
-        line += "</structuredefinition>\n"
-        return [line, errors]
+        output.addLine("</structuredefinition>")
+        return output
     }
 
     /**
      * Format the report as plain text.
-     * @returns {string}
+     * @returns {Output}
      */
-    formatText() {
-        let out_str = `==== ${this.filename}\n`
+    _formatText() {
+        let output = new Output()
+
+        output.addLine(`==== ${this.filename}`)
         this.reports.forEach(report => {
             if (report instanceof ElementReport) {
-                let lines = []
-                report.conceptReports.forEach(conceptReport => {
-                    let line = conceptReport.format("text")
-                    if (line) lines.push(line)
-                })
-                if (lines.length > 0) {
-                    out_str += `     == ${report.conceptId} (${report.fhirPath})\n` + lines.join("\n") + "\n"
+                let outputForElement = report.format("text")
+                if (outputForElement.hasLines()) {
+                    output.addLine(`     == ${report.conceptId} (${report.fhirPath})`)
+                    output.addOutput(outputForElement)
                 }
             } else if (report instanceof Issue) {
-                out_str += `${report.level}: ${report.message}\n`
+                output.addOutput(issue.format("text"))
             }
         })
 
-        return out_str
+        return output
     }
 }
 
@@ -316,6 +361,19 @@ class ElementReport {
             "warning": 0,
             "error": 0
         })
+    }
+
+    /**
+     * Format the report.
+     * @param {string} format - Either "text" or "xml"
+     * @returns {Output}
+     */
+    format(format) {
+        let output = new Output()
+        this.conceptReports.forEach(report => {
+            output.addOutput(report.format(format))
+        })
+        return output
     }
 }
 
@@ -358,8 +416,15 @@ class Issue extends AbstractIssue {
         this.message = message
     }
 
+    /**
+     * Format the issue.
+     * @param {string} format - Either "text" or "xml"
+     * @returns {Output}
+     */
     format(format) {
-        return `${this.level}: ${this.message}`
+        let output = new Output()
+        output.addError(`${this.level}: ${this.message}`)
+        return output
     }
 }
 
@@ -381,6 +446,11 @@ class ConceptReport extends AbstractIssue {
         this.actual   = actual
     }
 
+    /**
+     * Format the report.
+     * @param {string} format - Either "text" or "xml"
+     * @returns {Output}
+     */
     format(format) {
         if (format == "xml") {
             return this._formatXML()
@@ -390,35 +460,34 @@ class ConceptReport extends AbstractIssue {
     }
 
     _formatXML() {
-        let line = ""
+        let output = new Output()
         if (this.type == "short") {
-            line += "<zib_alias_en>" + this.expected + "</zib_alias_en>"
-            line += "<fhir_short>" + this.actual + "</fhir_short>"
-            line += "<fhir_short_warn>" + this.level + "</fhir_short_warn>"
+            output.addLine("<zib_alias_en>" + this.expected + "</zib_alias_en>")
+            output.addLine("<fhir_short>" + this.actual + "</fhir_short>")
+            output.addLine("<fhir_short_warn>" + this.level + "</fhir_short_warn>")
         } else if (this.type == "alias") {
-            line += "<zib_name>" + this.expected + "</zib_name>"
-            line += "<fhir_alias>" + this.actual + "</fhir_alias>"
-            line += "<fhir_alias_warn>" + this.level + "</fhir_alias_warn>"
+            output.addLine("<zib_name>" + this.expected + "</zib_name>")
+            output.addLine("<fhir_alias>" + this.actual + "</fhir_alias>")
+            output.addLine("<fhir_alias_warn>" + this.level + "</fhir_alias_warn>")
         } else if (this.type == "datatype") {
-            line += "<zib_datatype>" + this.expected + "</zib_datatype>"
-            line += "<fhir_datatype>" + this.actual + "</fhir_datatype>"
-            line += "<fhir_datatype_error>" + this.level + "</fhir_datatype_error>"
+            output.addLine("<zib_datatype>" + this.expected + "</zib_datatype>")
+            output.addLine("<fhir_datatype>" + this.actual + "</fhir_datatype>")
+            output.addLine("<fhir_datatype_error>" + this.level + "</fhir_datatype_error>")
         } else if (this.type == "cardinality") {
-            line += "<zib_card>" + this.expected + "</zib_card>"
-            line += "<fhir_card>" + this.actual + "</fhir_card>"
-            line += "<fhir_card_warn>" + this.level + "</fhir_card_warn>"
+            output.addLine("<zib_card>" + this.expected + "</zib_card>")
+            output.addLine("<fhir_card>" + this.actual + "</fhir_card>")
+            output.addLine("<fhir_card_warn>" + this.level + "</fhir_card_warn>")
         }
 
-        if (line != "") {
-            return line
-        }
+        return output
     }
 
     _formatText() {
+        let output = new Output()
         if (this.level != 'OK') {
-            return "        " + (this.type + ":").padEnd(13) + this.level + ` (${this.actual} instead of ${this.expected})`
+            output.addLine("        " + (this.type + ":").padEnd(13) + this.level + ` (${this.actual} instead of ${this.expected})`)
         }
-        return
+        return output
     }
 }
 
