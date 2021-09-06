@@ -51,6 +51,9 @@ const argv = yargs
         default: 'xml',
         type: 'string',
         choices: ['xml', 'text']
+    }).option('stats-file', {
+        description: 'Write statistics to the following JSON file.',
+        type: 'string',
     })
     .command("$0 [options] <files..>", "")
     .help().alias('help', 'h')
@@ -841,27 +844,9 @@ if (argv["output-format"] == "xml") {
     console.log(statsMsg)
 }
 
-/**
- * Report some xml or textual output, depending on the output format set by the user.
- * @param {string|function|null} xml - a formatted XML string, or a function which returns a formatted string, to 
- *                                     output when the output format is "xml".
- * @param {string|function|null} text - a text string, or a function which returns a text string, to output when the
- *                                      output format is "text".
- * @param {any} args - the arguments to passed to the xml or text function.
- */
-function report(xml = null, text = null, ...args) {
-    let output = null
-    if (argv["output-format"] == "xml" && xml != null) {
-        output = xml
-    } else if (argv["output-format"] == "text" && text != null) {
-        output = text;
-    }
-    if (typeof output == 'function') {
-        output = output.apply(this, args);
-    }
-    if (output) {
-        console.log(output);
-    }
+// Optionally write a statistics file
+if (argv["stats-file"]) {
+    fs.writeFileSync(argv["stats-file"], JSON.stringify(issueStats))
 }
 
 // Return with a succes or failure status code

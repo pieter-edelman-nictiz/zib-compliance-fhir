@@ -21,6 +21,9 @@ inputs:
       default: error
     zib-deviations:
       description: 'A YAML file describing, with reason, where the profile may deviate from the zib.'
+outputs:
+  stats-file:
+    value: ${{ steps.run-script.outputs.stats-file }}
 runs:
   using: 'composite'
   steps:
@@ -50,8 +53,11 @@ runs:
       id: set_options
       shell: bash
     - name: Run script
+      id: run-script
       run: |
+        stats_file=$(mktemp --suffix=.json)
+        echo "::set-output name=stats-file::$(echo $stats_file)"
         if [ ${{ steps.check_run.outputs.run }} ]; then
-          node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z ${{ inputs.zib-release }} -v ${{ inputs.fhir-version }} -r ${{inputs.restrict-missing }} --fail-at ${{ inputs.fail-at }} ${{ steps.set_options.opt_zib_deviations }} -f text ${{ inputs.structuredefinitions }}
+          node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z ${{ inputs.zib-release }} -v ${{ inputs.fhir-version }} -r ${{inputs.restrict-missing }} --fail-at ${{ inputs.fail-at }} ${{ steps.set_options.opt_zib_deviations }} -f text ${{ inputs.structuredefinitions }} --stats-file=$stats_file
         fi
       shell: bash
