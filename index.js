@@ -96,6 +96,15 @@ var datatypes = {
     7903: "ANY"
 };
 
+/** 
+ * The graveness that a detected issue may have.
+ */
+let IssueLevel = {
+    "OK":      "ok",
+    "WARNING": "warning",
+    "ERROR":   "error"
+}
+
 /**
  * Class to hande output to the terminal.
  */
@@ -173,7 +182,7 @@ class Report {
     /**
      * Add a detected issue to the overall report
      * @param {string} message 
-     * @param {string} level - either "OK", "WARN" or "ERROR"
+     * @param {IssueLevel} level - the issue level
      */
     addIssue(message, level) {
         this.reports.push(new Issue(message, level))
@@ -192,8 +201,8 @@ class Report {
 
     /**
      * Return statistics about the number of issues detected.
-     * @returns {Object} - Object containing the keys "ok", "warning" and "error" with the total succesfull checks,
-     *                     detected warnings and detected errors respectively.
+     * @returns {Object} - Object containing the IssueLevel levels ("ok", "warning" and "error") with the total 
+     *                     succesfull checks, detected warnings and detected errors respectively.
      */
     getStatistics() {
         return this.reports.reduce(Report.statsReducer, {
@@ -205,7 +214,7 @@ class Report {
 
     /**
      * Helper method to calculate statistics about the detected issue.
-     * @param {Object} curr - Object containing the keys "ok", "warning" and "error"
+     * @param {Object} curr - Object containing the IssueLevel levels ("ok", "warning" and "error")
      * @param {*} addition - A class instance that the additional statistics should be taken from, using the
      *                       getStatistics() method.
      * @returns - A new Object with the summed number of "ok", "warning" and "error" messages.
@@ -213,13 +222,13 @@ class Report {
     static statsReducer(curr, addition) {
         if ("getStatistics" in addition) {
             let additionalStats = addition.getStatistics()
-            if ("ok" in additionalStats) {
+            if (IssueLevel.OK in additionalStats) {
                 curr.ok += additionalStats.ok
             }
-            if ("warning" in additionalStats) {
+            if (IssueLevel.WARNING in additionalStats) {
                 curr.warning += additionalStats.warning
             }
-            if ("error" in additionalStats) {
+            if (IssueLevel.ERROR in additionalStats) {
                 curr.error += additionalStats.error
             }
         }
@@ -248,7 +257,7 @@ class ProfileReport {
     /**
      * Add a detected issue to the profile report
      * @param {string} message 
-     * @param {string} level - either "OK", "WARN" or "ERROR"
+     * @param {IssueLevel} level - the issue level
      */
     addIssue(message, level) {
         this.reports.push(new Issue(message, level))
@@ -256,8 +265,8 @@ class ProfileReport {
 
     /**
      * Return statistics about the number of issues detected.
-     * @returns {Object} - Object containing the keys "ok", "warning" and "error" with the total succesfull checks,
-     *                     detected warnings and detected errors respectively.
+     * @returns {Object} - Object containing the IssueLevel levels "ok", "warning" and "error" with the total
+     *                     succesfull checks, detected warnings and detected errors respectively.
      */
     getStatistics() {
         return this.reports.reduce(Report.statsReducer, {
@@ -345,9 +354,9 @@ class ElementReport {
     /**
      * Add a report about a checked concept
      * @param {string} type - Either "short", "alias", "datatype" or "cardinality"
-     * @param {*} expected - The expected value
-     * @param {*} actual - The found value
-     * @param {*} level - The warning level, either "OK", "WARN" or "ERROR"
+     * @param {string} expected - The expected value
+     * @param {string} actual - The found value
+     * @param {IssueLevel} level - The issue level
      */
     addConceptReport(type, expected, actual, level) {
         this.conceptReports.push(new ConceptReport(type, expected, actual, level))
@@ -355,8 +364,8 @@ class ElementReport {
 
     /**
      * Return statistics about the number of issues detected.
-     * @returns {Object} - Object containing the keys "ok", "warning" and "error" with the total succesfull checks,
-     *                     detected warnings and detected errors respectively.
+     * @returns {Object} - Object containing the IssueLevel keys "ok", "warning" and "error" with the total succesfull
+     *                     checks, detected warnings and detected errors respectively.
      */
     getStatistics() {
         return this.conceptReports.reduce(Report.statsReducer, {
@@ -390,18 +399,22 @@ class AbstractIssue {
 
     /**
      * Return statistics about the number of issues detected.
-     * @returns {Object} - Object containing the keys "ok", "warning" and "error" with the total succesfull checks,
-     *                     detected warnings and detected errors respectively.
+     * @returns {Object} - Object containing the IssueLevel levels "ok", "warning" and "error" with the total 
+     *                     succesfull checks, detected warnings and detected errors respectively.
      */
     getStatistics() {
-        if (this.level == "OK") {
+        if (this.level == IssueLevel.OK) {
             return {"ok": 1}
-        } else if (this.level == "WARN") {
+        } else if (this.level == IssueLevel.WARNING) {
             return {"warning": 1}
-        } else if (this.level == "ERROR") {
+        } else if (this.level == IssueLevel.ERROR) {
             return {"error": 1}
         }
         return {}
+    }
+
+    get formattedLevel() {
+        return this.level.toUpperCase()
     }
 }
 
@@ -412,7 +425,7 @@ class Issue extends AbstractIssue {
     /**
      * Create a new detected issue
      * @param {string} message - The issue message.
-     * @param {string} level - Either "OK", "WARN" or "ERROR"
+     * @param {IssueLevel} level - The level of the issue
      */
     constructor(message, level) {
         super(level)
@@ -426,7 +439,7 @@ class Issue extends AbstractIssue {
      */
     format(format) {
         let output = new Output()
-        output.addError(`${this.level}: ${this.message}`)
+        output.addError(`${this.formattedLevel}: ${this.message}`)
         return output
     }
 }
@@ -440,7 +453,7 @@ class ConceptReport extends AbstractIssue {
      * @param {string} type - Either "short", "alias", "datatype" or "cardinality"
      * @param {string} expected - The expected value
      * @param {string} actual - The found value
-     * @param {string} level - The warning level, either "OK", "WARN" or "ERROR"
+     * @param {IssueLevel} level - The warning level
      */
     constructor(type, expected, actual, level) {
         super(level)
@@ -467,19 +480,19 @@ class ConceptReport extends AbstractIssue {
         if (this.type == "short") {
             output.addLine("<zib_alias_en>" + this.expected + "</zib_alias_en>")
             output.addLine("<fhir_short>" + this.actual + "</fhir_short>")
-            output.addLine("<fhir_short_warn>" + this.level + "</fhir_short_warn>")
+            output.addLine("<fhir_short_warn>" + this.formattedLevel + "</fhir_short_warn>")
         } else if (this.type == "alias") {
             output.addLine("<zib_name>" + this.expected + "</zib_name>")
             output.addLine("<fhir_alias>" + this.actual + "</fhir_alias>")
-            output.addLine("<fhir_alias_warn>" + this.level + "</fhir_alias_warn>")
+            output.addLine("<fhir_alias_warn>" + this.formattedLevel + "</fhir_alias_warn>")
         } else if (this.type == "datatype") {
             output.addLine("<zib_datatype>" + this.expected + "</zib_datatype>")
             output.addLine("<fhir_datatype>" + this.actual + "</fhir_datatype>")
-            output.addLine("<fhir_datatype_error>" + this.level + "</fhir_datatype_error>")
+            output.addLine("<fhir_datatype_error>" + this.formattedLevel + "</fhir_datatype_error>")
         } else if (this.type == "cardinality") {
             output.addLine("<zib_card>" + this.expected + "</zib_card>")
             output.addLine("<fhir_card>" + this.actual + "</fhir_card>")
-            output.addLine("<fhir_card_warn>" + this.level + "</fhir_card_warn>")
+            output.addLine("<fhir_card_warn>" + this.formattedLevel + "</fhir_card_warn>")
         }
 
         return output
@@ -487,8 +500,8 @@ class ConceptReport extends AbstractIssue {
 
     _formatText() {
         let output = new Output()
-        if (this.level != 'OK') {
-            output.addLine("        " + (this.type + ":").padEnd(13) + this.level + ` (${this.actual} instead of ${this.expected})`)
+        if (this.level != IssueLevel.OK) {
+            output.addLine("        " + (this.type + ":").padEnd(13) + this.formattedLevel + ` (${this.actual} instead of ${this.expected})`)
         }
         return output
     }
@@ -649,9 +662,9 @@ argv.files.forEach(filename => {
                     if (result.messages.length > 0) {
                         let msg = `validating resource ${filename}\n` + JSON.stringify(result.messages, null, 4)
                         if (result.valid) {
-                            report.addIssue(msg, "WARN")
+                            report.addIssue(msg, IssueLevel.WARNING)
                         } else {
-                            report.addIssue(msg, "ERROR")
+                            report.addIssue(msg, IssueLevel.ERROR)
                         }
                     }
                 }
@@ -670,7 +683,7 @@ argv.files.forEach(filename => {
                                     if (_zibIdsMapped.indexOf(zibConceptId) == -1) _zibIdsMapped.push(zibConceptId);
                                     var concept = _conceptsById[zibConceptId];
                                     if (!concept) {
-                                        profileReport.addIssue(`unknown concept ${zibConceptId}`, "ERROR")
+                                        profileReport.addIssue(`unknown concept ${zibConceptId}`, IssueLevel.ERROR)
                                         return;
                                     }
 
@@ -688,8 +701,8 @@ argv.files.forEach(filename => {
                                         conceptNameNL = concept.name.toString().split("::")[0];
                                     }
 
-                                    elementReport.addConceptReport("alias", conceptNameEN, fhirShort, (conceptNameEN != fhirShort) ? "WARN" : "OK")
-                                    elementReport.addConceptReport("short", conceptNameNL, fhirAlias, (fhirAlias.indexOf(conceptNameNL) == -1) ? "WARN" : "OK")
+                                    elementReport.addConceptReport("alias", conceptNameEN, fhirShort, (conceptNameEN != fhirShort) ? IssueLevel.WARNING : IssueLevel.OK)
+                                    elementReport.addConceptReport("short", conceptNameNL, fhirAlias, (fhirAlias.indexOf(conceptNameNL) == -1) ? IssueLevel.WARNING : IssueLevel.OK)
 
                                     let conceptDt = zibOverrides.check(resource.id, element.id, "datatype");
                                     if (concept.datatype) {
@@ -703,29 +716,29 @@ argv.files.forEach(filename => {
                                         if (conceptDt == null) {
                                             conceptDt = concept.datatype;
                                         }
-                                        if (conceptDt == fhirDt) isCompatible = "OK";
-                                        else if (concept.datatype == 'II' && fhirDt == "Identifier") isCompatible = "OK";
-                                        else if (concept.datatype == 'ST' && ["string", "markdown"].includes(fhirDt)) isCompatible = "OK";
-                                        else if (concept.datatype == 'ST' && fhirDt == "Annotation") isCompatible = "OK";
-                                        else if (concept.datatype == 'PQ' && fhirDt == "Duration") isCompatible = "OK";
-                                        else if (concept.datatype == 'PQ' && fhirDt == "Quantity") isCompatible = "OK";
-                                        else if (concept.datatype == 'PQ' && fhirDt == "integer") isCompatible = "WARN"; // what is the unit?
-                                        else if (concept.datatype == 'PQ' && fhirDt == "decimal") isCompatible = "WARN"; // what is the unit?
-                                        else if (concept.datatype == 'CD' && fhirDt == "CodeableConcept") isCompatible = "OK";
-                                        else if (concept.datatype == 'CD' && fhirDt == "code") isCompatible = "OK";
-                                        else if (concept.datatype == 'CD' && fhirDt == "Coding") isCompatible = "OK";
-                                        else if (concept.datatype == 'CD' && fhirDt == "string") isCompatible = "WARN"; // what is the codesystem
-                                        else if (concept.datatype == 'CO' && fhirDt == "Coding") isCompatible = "OK";
-                                        else if (concept.datatype == 'TS' && fhirDt == "dateTime") isCompatible = "OK";
-                                        else if (concept.datatype == 'TS' && fhirDt == "date") isCompatible = "OK";
-                                        else if (concept.datatype == 'TS' && fhirDt == "Period") isCompatible = "ERROR start|end";
-                                        else if (concept.datatype == 'BL' && fhirDt == "boolean") isCompatible = "OK";
-                                        else if (concept.datatype == 'INT' && fhirDt == "integer") isCompatible = "OK";
-                                        else if (concept.datatype == 'INT' && fhirDt == "Quantity") isCompatible = "WARN"; // what is the unit?
-                                        else if (concept.datatype == 'ED' && fhirDt == "base64Binary") isCompatible = "OK";
-                                        else if (concept.datatype == 'ED' && fhirDt == "Attachement") isCompatible = "OK";
-                                        else if (fhirDt == "Extension") isCompatible = "CHECK extension.value[x]";
-                                        else isCompatible = "ERROR";
+                                        if (conceptDt == fhirDt) isCompatible = IssueLevel.OK;
+                                        else if (concept.datatype == 'II' && fhirDt == "Identifier") isCompatible = IssueLevel.OK;
+                                        else if (concept.datatype == 'ST' && ["string", "markdown"].includes(fhirDt)) isCompatible = IssueLevel.OK;
+                                        else if (concept.datatype == 'ST' && fhirDt == "Annotation") isCompatible = IssueLevel.OK;
+                                        else if (concept.datatype == 'PQ' && fhirDt == "Duration") isCompatible = IssueLevel.OK;
+                                        else if (concept.datatype == 'PQ' && fhirDt == "Quantity") isCompatible = IssueLevel.OK;
+                                        else if (concept.datatype == 'PQ' && fhirDt == "integer") isCompatible = IssueLevel.WARNING; // what is the unit?
+                                        else if (concept.datatype == 'PQ' && fhirDt == "decimal") isCompatible = IssueLevel.WARNING; // what is the unit?
+                                        else if (concept.datatype == 'CD' && fhirDt == "CodeableConcept") isCompatible = IssueLevel.OK;
+                                        else if (concept.datatype == 'CD' && fhirDt == "code") isCompatible = IssueLevel.OK;
+                                        else if (concept.datatype == 'CD' && fhirDt == "Coding") isCompatible = IssueLevel.OK;
+                                        else if (concept.datatype == 'CD' && fhirDt == "string") isCompatible = IssueLevel.WARNING; // what is the codesystem
+                                        else if (concept.datatype == 'CO' && fhirDt == "Coding") isCompatible = IssueLevel.OK;
+                                        else if (concept.datatype == 'TS' && fhirDt == "dateTime") isCompatible = IssueLevel.OK;
+                                        else if (concept.datatype == 'TS' && fhirDt == "date") isCompatible = IssueLevel.OK;
+                                        else if (concept.datatype == 'TS' && fhirDt == "Period") isCompatible = IssueLevel.ERROR;
+                                        else if (concept.datatype == 'BL' && fhirDt == "boolean") isCompatible = IssueLevel.OK;
+                                        else if (concept.datatype == 'INT' && fhirDt == "integer") isCompatible = IssueLevel.OK;
+                                        else if (concept.datatype == 'INT' && fhirDt == "Quantity") isCompatible = IssueLevel.WARNING; // what is the unit?
+                                        else if (concept.datatype == 'ED' && fhirDt == "base64Binary") isCompatible = IssueLevel.OK;
+                                        else if (concept.datatype == 'ED' && fhirDt == "Attachement") isCompatible = IssueLevel.OK;
+                                        else if (fhirDt == "Extension") isCompatible = IssueLevel.WARNING;
+                                        else isCompatible = IssueLevel.ERROR;
                                         elementReport.addConceptReport("datatype", concept.datatype, fhirDt, isCompatible)
                                     }
                                     else {
@@ -740,16 +753,16 @@ argv.files.forEach(filename => {
                                             }
                                         }
                                         if (conceptDt == "Reference") {
-                                            elementReport.addConceptReport("datatype", conceptDt, fhirDt, (fhirDt != "Reference") ? "WARN":"OK")
+                                            elementReport.addConceptReport("datatype", conceptDt, fhirDt, (fhirDt != "Reference") ? IssueLevel.WARNING:IssueLevel.OK)
                                         } else {
                                             let isCompatible;
-                                            if (fhirDt == "Extension") isCompatible = "CHECK Extension";
-                                            else if (conceptDt == 'container' && fhirDt == "Reference") isCompatible = "OK";
-                                            else if (conceptDt == 'container' && fhirDt == undefined) isCompatible = "OK";
-                                            else if (conceptDt == 'rootconcept' && fhirDt == undefined) isCompatible = "OK";
-                                            else if (conceptDt == 'rootconcept' && fhirDt != undefined) isCompatible = "WARN";
-                                            else if (conceptDt == fhirDt) isCompatible = "OK"; // When the datatype is manually overridden
-                                            else isCompatible = "ERROR";
+                                            if (fhirDt == "Extension") isCompatible = IssueLevel.WARNING;
+                                            else if (conceptDt == 'container' && fhirDt == "Reference") isCompatible = IssueLevel.OK;
+                                            else if (conceptDt == 'container' && fhirDt == undefined) isCompatible = IssueLevel.OK;
+                                            else if (conceptDt == 'rootconcept' && fhirDt == undefined) isCompatible = IssueLevel.OK;
+                                            else if (conceptDt == 'rootconcept' && fhirDt != undefined) isCompatible = IssueLevel.WARNING;
+                                            else if (conceptDt == fhirDt) isCompatible = IssueLevel.OK; // When the datatype is manually overridden
+                                            else isCompatible = IssueLevel.ERROR;
                                             elementReport.addConceptReport("datatype", conceptDt, fhirDt, isCompatible)
                                         }
                                     }
@@ -787,10 +800,10 @@ argv.files.forEach(filename => {
                                             fhirCard = combinedFhirCard
                                         }
 
-                                        let level = "OK"
+                                        let level = IssueLevel.OK
                                         if (fhirCard != conceptCard) {
                                             // if fhir has stricter cardinality then error
-                                            level = (conceptCard.endsWith("..*")) ? "ERROR" : "WARN";
+                                            level = (conceptCard.endsWith("..*")) ? IssueLevel.ERROR : IssueLevel.WARNING;
                                         }
                                         elementReport.addConceptReport("cardinality", conceptCard, fhirCard + (cardinalityIsCombined ? " (effective)" : ""), level)
                                     }
@@ -801,7 +814,7 @@ argv.files.forEach(filename => {
                     });
                 }
                 else {
-                    report.addIssue("no snapshot for " + filename, "ERROR")
+                    report.addIssue("no snapshot for " + filename, IssueLevel.ERROR)
                 }
             }
             report.addProfileReport(profileReport)
@@ -823,34 +836,40 @@ Object.keys(_conceptsById).forEach(zibId => {
                 // find rootconcept with this concept
                 var rootconcept = zibs.model.objects[0].object.find(obj => obj.stereotype == "rootconcept" && obj.parentId[0] == parentId[0]);
                 if (rootconcept) {
-                    report.addIssue("not mapped " + rootconcept.name + "." + _conceptsById[zibId].name + " " + zibId, "WARN")
+                    report.addIssue("not mapped " + rootconcept.name + "." + _conceptsById[zibId].name + " " + zibId, IssueLevel.WARNING)
                 } else {
-                    report.addIssue("not mapped ???." + _conceptsById[zibId].name + " " + zibId, "WARN")
+                    report.addIssue("not mapped ???." + _conceptsById[zibId].name + " " + zibId, IssueLevel.WARNING)
                 }
             }
         }
     }
 });
 
+// Write the result to stdout/stderr
 report.write(argv["output-format"])
 
 // Print some statistics
-let issueStats = report.getStatistics()
-let statsMsg = "\nzibConceptIds: " + Object.keys(_conceptsById).length + ", mapped: " + _zibIdsMapped.length + "\n"
-statsMsg += `Detected ${issueStats["error"]} errors and ${issueStats["warning"]} warnings.`
+let statistics = {
+    "zibConceptIds": Object.keys(_conceptsById).length,
+    "mappedConcepts": _zibIdsMapped.length,
+    "issueStats": report.getStatistics()
+}
+
+let statsMsg = `\nzibConceptIds: ${statistics.zibConceptIds}, mapped: ${statistics.mappedConcepts}\n`
+statsMsg += `Detected ${statistics.issueStats.error} errors and ${statistics.issueStats.warning} warnings.`
 if (argv["output-format"] == "xml") {
     console.error(statsMsg)
 } else {
     console.log(statsMsg)
 }
 
-// Optionally write a statistics file
+// Optionally write statistics to a file
 if (argv["stats-file"]) {
-    fs.writeFileSync(argv["stats-file"], JSON.stringify(issueStats))
+    fs.writeFileSync(argv["stats-file"], JSON.stringify(statistics))
 }
 
 // Return with a succes or failure status code
-if (issueStats["error"] > 0 || (issueStats["warning"] > 0 && argv["fail-at"] == "warning")) {
+if (statistics.issueStats.error > 0 || (statistics.issueStats.warning > 0 && argv["fail-at"] == "warning")) {
     console.error("\nThere were errors below your threshold. The test has FAILED.");
     process.exit(1);
 }
