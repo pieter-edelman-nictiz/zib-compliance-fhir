@@ -23,6 +23,7 @@ inputs:
       description: 'A YAML file describing, with reason, where the profile may deviate from the zib.'
 outputs:
   stats-file:
+    description: The location of the JSON file containing statistics about the number check.
     value: ${{ steps.run-script.outputs.stats-file }}
 runs:
   using: 'composite'
