@@ -53,7 +53,7 @@ runs:
           npm install --prefix ${{ github.action_path }} > /dev/null 2> /dev/null
         fi
       shell: bash
-    - run: echo "::set-output name=opt_zib_deviations::$(if [ ! -z ${{inputs.zib-deviations}} ]; then echo --zib-deviations=${{ inputs.zib-deviations }};fi)"
+    - run: echo "::set-output name=opt_zib_deviations::$(if [ ! -z ${{inputs.zib-deviations}} ]; then echo --zib-overrides=${{ inputs.zib-deviations }};fi)"
       id: set_options
       shell: bash
     - name: Run script
@@ -62,6 +62,6 @@ runs:
         stats_file=$(mktemp --suffix=.json)
         echo "::set-output name=stats-file::$(echo $stats_file)"
         if [ ${{ steps.check_run.outputs.run }} ]; then
-          node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z ${{ inputs.zib-release }} -v ${{ inputs.fhir-version }} --check-missing ${{inputs.check-missing }} --fail-at ${{ inputs.fail-at }} ${{ steps.set_options.opt_zib_deviations }} -f text ${{ inputs.structuredefinitions }} --stats-file=$stats_file
+          node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z ${{ inputs.zib-release }} -v ${{ inputs.fhir-version }} --check-missing ${{inputs.check-missing }} --fail-at ${{ inputs.fail-at }} ${{ steps.set_options.outputs.opt_zib_deviations }} -f text ${{ inputs.structuredefinitions }} --stats-file=$stats_file
         fi
       shell: bash
