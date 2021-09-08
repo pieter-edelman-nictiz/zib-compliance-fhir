@@ -31,10 +31,11 @@ const argv = yargs
         choices: ['STU3', 'R4'],
         default: 'R4'
     })
-    .option('restrict-missing', {
-        alias: 'r',
-        description: 'Restrict the check for missing arguments to the zibs that have been mapped to the provided profiles',
-        type: 'boolean',
+    .option('check-missing', {
+        description: 'Check for missing elements from all zibs ("all"), the zibs that are mapped to the checked profiles ("mapped-only") or none at all ("none").',
+        type: 'string',
+        choices: ['none', 'mapped-only', 'all'],
+        default: 'none'
     })
     .option('fail-at', {
         alias: 'a',
@@ -822,28 +823,29 @@ argv.files.forEach(filename => {
     }
 });
 
-// show not mapped zibIds
-Object.keys(_conceptsById).forEach(zibId => {
-    if (_zibIdsMapped.indexOf(zibId) == -1) {
-        // ignore containers and rootconcepts
-        if (!zibOverrides.hasUnmapped(zibId) && (_conceptsById[zibId].stereotype != "container" && _conceptsById[zibId].stereotype != "rootconcept")) {
-            
-            let cmPrefix = getCMPrefix(zibId)
-            if (!argv.r || cmPrefixes.has(cmPrefix)) { // If the -r flag is set, only report from zibs that are in the supplied profiles
-                var parentId = _conceptsById[zibId].parentId;
-                let msg = ""
+// show unmapped zibIds
+if (argv["check-missing"] != "none") {
+    Object.keys(_conceptsById).forEach(zibId => {
+        if (_zibIdsMapped.indexOf(zibId) == -1) {
+            // ignore containers and rootconcepts
+            if (!zibOverrides.hasUnmapped(zibId) && (_conceptsById[zibId].stereotype != "container" && _conceptsById[zibId].stereotype != "rootconcept")) {
+                
+                let cmPrefix = getCMPrefix(zibId)
+                if (argv["check-missing"] == "all" || cmPrefixes.has(cmPrefix)) {
+                    var parentId = _conceptsById[zibId].parentId;
 
-                // find rootconcept with this concept
-                var rootconcept = zibs.model.objects[0].object.find(obj => obj.stereotype == "rootconcept" && obj.parentId[0] == parentId[0]);
-                if (rootconcept) {
-                    report.addIssue("not mapped " + rootconcept.name + "." + _conceptsById[zibId].name + " " + zibId, IssueLevel.WARNING)
-                } else {
-                    report.addIssue("not mapped ???." + _conceptsById[zibId].name + " " + zibId, IssueLevel.WARNING)
+                    // find rootconcept with this concept
+                    var rootconcept = zibs.model.objects[0].object.find(obj => obj.stereotype == "rootconcept" && obj.parentId[0] == parentId[0]);
+                    if (rootconcept) {
+                        report.addIssue("not mapped " + rootconcept.name + "." + _conceptsById[zibId].name + " " + zibId, IssueLevel.WARNING)
+                    } else {
+                        report.addIssue("not mapped ???." + _conceptsById[zibId].name + " " + zibId, IssueLevel.WARNING)
+                    }
                 }
             }
         }
-    }
-});
+    });
+}
 
 // Write the result to stdout/stderr
 report.write(argv["output-format"])

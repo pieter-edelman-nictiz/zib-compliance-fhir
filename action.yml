@@ -13,9 +13,9 @@ inputs:
     fhir-version:
       description: 'The FHIR version to use (the "fhirVersion" element in the structuredefinitions will be ignored).\nIf the version is STU3, the definitions should be present in the "definitions" folder.'
       default: 'R4'
-    restrict-missing:
-      description: 'Restrict the check for missing arguments to the zibs that have been mapped to the provided profiles'
-      default: true
+    check-missing:
+      description: 'Check for missing elements from all zibs ("all"), the zibs that are mapped to the checked profiles ("mapped-only") or none at all ("none").'
+      default: all
     fail-at:
       description: The level at which issues are considered fatal (error or warning).
       default: error
@@ -62,6 +62,6 @@ runs:
         stats_file=$(mktemp --suffix=.json)
         echo "::set-output name=stats-file::$(echo $stats_file)"
         if [ ${{ steps.check_run.outputs.run }} ]; then
-          node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z ${{ inputs.zib-release }} -v ${{ inputs.fhir-version }} -r ${{inputs.restrict-missing }} --fail-at ${{ inputs.fail-at }} ${{ steps.set_options.opt_zib_deviations }} -f text ${{ inputs.structuredefinitions }} --stats-file=$stats_file
+          node ${{ github.action_path }}/index.js -m ${{ inputs.max-file }} -z ${{ inputs.zib-release }} -v ${{ inputs.fhir-version }} --check-missing ${{inputs.check-missing }} --fail-at ${{ inputs.fail-at }} ${{ steps.set_options.opt_zib_deviations }} -f text ${{ inputs.structuredefinitions }} --stats-file=$stats_file
         fi
       shell: bash
