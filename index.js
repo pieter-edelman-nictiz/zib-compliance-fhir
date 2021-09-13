@@ -702,8 +702,8 @@ argv.files.forEach(filename => {
                                         conceptNameNL = concept.name.toString().split("::")[0];
                                     }
 
-                                    elementReport.addConceptReport("alias", conceptNameEN, fhirShort, (conceptNameEN != fhirShort) ? IssueLevel.WARNING : IssueLevel.OK)
-                                    elementReport.addConceptReport("short", conceptNameNL, fhirAlias, (fhirAlias.indexOf(conceptNameNL) == -1) ? IssueLevel.WARNING : IssueLevel.OK)
+                                    elementReport.addConceptReport("short", conceptNameEN, fhirShort, (conceptNameEN != fhirShort) ? IssueLevel.WARNING : IssueLevel.OK)
+                                    elementReport.addConceptReport("alias", conceptNameNL, fhirAlias, (fhirAlias.indexOf(conceptNameNL) == -1) ? IssueLevel.WARNING : IssueLevel.OK)
 
                                     let conceptDt = zibOverrides.check(resource.id, element.id, "datatype");
                                     if (concept.datatype) {
@@ -741,8 +741,7 @@ argv.files.forEach(filename => {
                                         else if (fhirDt == "Extension") isCompatible = IssueLevel.WARNING;
                                         else isCompatible = IssueLevel.ERROR;
                                         elementReport.addConceptReport("datatype", concept.datatype, fhirDt, isCompatible)
-                                    }
-                                    else {
+                                    } else {
                                         var tag1 = concept.tag.find(tag => tag.$.name === 'DCM::ReferencedConceptId');
                                         var tag2 = concept.tag.find(tag => tag.$.name === 'DCM::ReferencedDefinitionCode');
                                         var fhirDt = (element.type?element.type[0].code:undefined);
