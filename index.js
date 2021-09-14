@@ -334,7 +334,7 @@ class ProfileReport {
                     output.addOutput(outputForElement)
                 }
             } else if (report instanceof Issue) {
-                output.addOutput(issue.format("text"))
+                output.addOutput(report.format("text"))
             }
         })
 
