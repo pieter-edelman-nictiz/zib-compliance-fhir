@@ -744,7 +744,7 @@ argv.files.forEach(filename => {
                                     } else {
                                         var tag1 = concept.tag.find(tag => tag.$.name === 'DCM::ReferencedConceptId');
                                         var tag2 = concept.tag.find(tag => tag.$.name === 'DCM::ReferencedDefinitionCode');
-                                        var fhirDt = (element.type?element.type[0].code:undefined);
+                                        var fhirDt = (element.type?element.type[0].code : "undefined");
                                         if (conceptDt == null) {
                                             if (tag1 || tag2) {
                                                 conceptDt = "Reference";
@@ -758,9 +758,9 @@ argv.files.forEach(filename => {
                                             let isCompatible;
                                             if (fhirDt == "Extension") isCompatible = IssueLevel.WARNING;
                                             else if (conceptDt == 'container' && fhirDt == "Reference") isCompatible = IssueLevel.OK;
-                                            else if (conceptDt == 'container' && fhirDt == undefined) isCompatible = IssueLevel.OK;
-                                            else if (conceptDt == 'rootconcept' && fhirDt == undefined) isCompatible = IssueLevel.OK;
-                                            else if (conceptDt == 'rootconcept' && fhirDt != undefined) isCompatible = IssueLevel.WARNING;
+                                            else if (conceptDt == 'container' && fhirDt == "undefined") isCompatible = IssueLevel.OK;
+                                            else if (conceptDt == 'rootconcept' && fhirDt == "undefined") isCompatible = IssueLevel.OK;
+                                            else if (conceptDt == 'rootconcept' && fhirDt != "undefined") isCompatible = IssueLevel.WARNING;
                                             else if (conceptDt == fhirDt) isCompatible = IssueLevel.OK; // When the datatype is manually overridden
                                             else isCompatible = IssueLevel.ERROR;
                                             elementReport.addConceptReport("datatype", conceptDt, fhirDt, isCompatible)
