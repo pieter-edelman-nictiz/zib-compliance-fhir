@@ -730,6 +730,7 @@ argv.files.forEach(filename => {
                                         else if (concept.datatype == 'CD' && fhirDt == "Coding") isCompatible = IssueLevel.OK;
                                         else if (concept.datatype == 'CD' && fhirDt == "string") isCompatible = IssueLevel.WARNING; // what is the codesystem
                                         else if (concept.datatype == 'CO' && fhirDt == "Coding") isCompatible = IssueLevel.OK;
+                                        else if (concept.datatype == 'CO' && fhirDt == "CodeableConcept") isCompatible = IssueLevel.OK;
                                         else if (concept.datatype == 'TS' && fhirDt == "dateTime") isCompatible = IssueLevel.OK;
                                         else if (concept.datatype == 'TS' && fhirDt == "date") isCompatible = IssueLevel.OK;
                                         else if (concept.datatype == 'TS' && fhirDt == "Period") isCompatible = IssueLevel.ERROR;
