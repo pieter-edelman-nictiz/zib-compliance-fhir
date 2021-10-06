@@ -738,7 +738,7 @@ argv.files.forEach(filename => {
                                         else if (concept.datatype == 'INT' && fhirDt == "integer") isCompatible = IssueLevel.OK;
                                         else if (concept.datatype == 'INT' && fhirDt == "Quantity") isCompatible = IssueLevel.WARNING; // what is the unit?
                                         else if (concept.datatype == 'ED' && fhirDt == "base64Binary") isCompatible = IssueLevel.OK;
-                                        else if (concept.datatype == 'ED' && fhirDt == "Attachement") isCompatible = IssueLevel.OK;
+                                        else if (concept.datatype == 'ED' && fhirDt == "Attachment") isCompatible = IssueLevel.OK;
                                         else if (fhirDt == "Extension") isCompatible = IssueLevel.WARNING;
                                         else isCompatible = IssueLevel.ERROR;
                                         elementReport.addConceptReport("datatype", concept.datatype, fhirDt, isCompatible)
