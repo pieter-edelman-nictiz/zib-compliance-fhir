@@ -760,6 +760,7 @@ argv.files.forEach(filename => {
                                             if (fhirDt == "Extension") isCompatible = IssueLevel.WARNING;
                                             else if (conceptDt == 'container' && fhirDt == "Reference") isCompatible = IssueLevel.OK;
                                             else if (conceptDt == 'container' && fhirDt == "undefined") isCompatible = IssueLevel.OK;
+                                            else if (conceptDt == 'container' && fhirDt == "BackboneElement") isCompatible = IssueLevel.OK;
                                             else if (conceptDt == 'rootconcept' && fhirDt == "undefined") isCompatible = IssueLevel.OK;
                                             else if (conceptDt == 'rootconcept' && fhirDt != "undefined") isCompatible = IssueLevel.WARNING;
                                             else if (conceptDt == fhirDt) isCompatible = IssueLevel.OK; // When the datatype is manually overridden
