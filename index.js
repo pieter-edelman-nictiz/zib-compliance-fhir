@@ -7,7 +7,8 @@ const yaml = require('js-yaml');
 const yargs = require('yargs');
 
 // Unique identification string for when mappings are implicit, as described in the profiling guidelines.
-const IMPLICIT_IDENTIFIER = ' (implicit, main mapping is on '
+const IMPLICIT_IDENTIFIER    = ' (implicit, main mapping is on '
+const REVERSE_REF_IDENTIFIER = 'Reversed reference for '
 
 // Parse command line options and argumens
 const argv = yargs
@@ -626,10 +627,8 @@ class ZibOverrides {
 }
 var zibOverrides = new ZibOverrides(argv["zib-overrides"]);
 
-var _zibIdsMapped = [];
-
-// Collect all NL-CM:xx.xx prefixes that are present in the supplied structuredefinitions
-var cmPrefixes = new Set();
+// Collect als zib ids that are mapped in the supplied StructureDefinitions
+let zibIdsMapped = new Set()
 
 // The identifier to recognize mappings for the target zib release
 let zibRegEx = new RegExp("-" + argv["zib-release"] + "EN");
@@ -678,28 +677,91 @@ argv.files.forEach(filename => {
                             // check mappings and only handle mappings to the target zib release
                             element.mapping.forEach(mapping => {
                                 if (zibRegEx.test(mapping.identity) && !mapping.comment.includes(IMPLICIT_IDENTIFIER)) {
-                                    cmPrefixes.add(getCMPrefix(mapping.map))
+                                    zibIdsMapped.add(mapping.map)
 
-                                    var zibConceptId = mapping.map;
-                                    if (_zibIdsMapped.indexOf(zibConceptId) == -1) _zibIdsMapped.push(zibConceptId);
-                                    var concept = _conceptsById[zibConceptId];
+                                    let elementReport = new ElementReport(mapping.map, element.id)
+
+                                    let fhirShort = element.short.toString()
+                                    let fhirAlias = element.alias ? element.alias.toString() : ''
+
+                                    let conceptNameEN = zibOverrides.check(resource.id, element.id, "short")
+                                    let conceptNameNL = zibOverrides.check(resource.id, element.id, "alias")
+
+                                    let concept = _conceptsById[mapping.map];
                                     if (!concept) {
-                                        profileReport.addIssue(`unknown concept ${zibConceptId}`, IssueLevel.ERROR)
+                                        profileReport.addIssue(`unknown concept ${mapping.map}`, IssueLevel.ERROR)
                                         return;
                                     }
 
-                                    let elementReport = new ElementReport(zibConceptId, element.id)
+                                    if (mapping.comment.startsWith(REVERSE_REF_IDENTIFIER)) {
+                                        // If the mapping documents a reference that in FHIR points in the opposite
+                                        // direction of what the zib specifies, short and alias should be set to the
+                                        // target of the reference.
+                                        let rootconcept = _conceptsById[getCMPrefix(mapping.map) + ".1"]
+                                        if (conceptNameEN == null) {
+                                            conceptNameEN = rootconcept.alias[0].substring(3).trim()
+                                        }
+                                        if (conceptNameNL == null) {
+                                            conceptNameNL = rootconcept.name[0]
+                                        }
+                                    } else {
+                                        if (conceptNameEN == null) {
+                                            let conceptNames = [];
+                                            element.mapping.forEach(mapping => {
+                                                if (zibRegEx.test(mapping.identity)) {
+                                                    // Cut of "EN: ", and cut off the part after "::" if it is a reference
+                                                    let conceptName = _conceptsById[mapping.map].alias[0].substring(3).trim().split("::")[0]
+                                                    conceptNames.push(conceptName)
+                                                }
+                                            })
+                                            conceptNameEN = [...new Set(conceptNames)].join(" / ")
+                                        }
+                                        if (conceptNameNL == null) {
+                                            // Cut of the part after "::" if it is a reference
+                                            conceptNameNL = concept.name.toString().split("::")[0];
+                                        }
 
-                                    var fhirShort = element.short.toString();
-                                    var conceptNameEN = zibOverrides.check(resource.id, element.id, "short")
-                                    if (conceptNameEN == null) {
-                                        conceptNameEN = constructConceptNameEN(element);
-                                    }
-                                    var fhirAlias = element.alias?element.alias.toString():'';
-                                    var conceptNameNL = zibOverrides.check(resource.id, element.id, "alias")
-                                    if (conceptNameNL == null) {
-                                        // Cut of the part after "::" if it is a reference
-                                        conceptNameNL = concept.name.toString().split("::")[0];
+                                        if (concept.cardinality) {
+                                            // Get the zib cardinality, or its overridden value.
+                                            let conceptCard = zibOverrides.check(resource.id, element.id, "cardinality");
+                                            if (conceptCard == null) {
+                                                if (element.id.split(".").length == 1) { // Root element cannot have another cardinality than 0..*, so ignore the zib cardinality here
+                                                    conceptCard = "0..*";
+                                                } else {
+                                                    conceptCard = concept.cardinality;
+                                                }
+                                            }
+    
+                                            // Get the cardinality of the mapped FHIR element
+                                            var fhirCard = element.min + ".." + element.max;
+                                            // Handle the common case where the element is mapped onto Extension.value[x].
+                                            // In this case, the cardinality of the element itself should be combined with
+                                            // the cardinality of the extension root (eg. if .value is required but the
+                                            // extension use itself is optional, the result is that the value is optional).
+                                            let cardinalityIsCombined = false
+                                            let extensionCheck = element.id.match(/(.*)\.extension:([^\s\.]+)\.value\[x\]/)
+                                            if (extensionCheck && !extensionCheck[1].includes("extension:")) { // Ignore complex extensions because of co-dependencies
+                                                let extensionRootPath = extensionCheck[1] + ".extension:" + extensionCheck[2]
+                                                let extensionRoot = resource.snapshot.element.filter(element => element.id == extensionRootPath)[0]
+                                                let min = parseInt(element.min) * parseInt(extensionRoot.min)
+                                                let max
+                                                if (element.max == "*" || extensionRoot.max == "*") {
+                                                    max = "*"
+                                                } else {
+                                                    max = parseInt(element.max) * parseInt(extensionRoot.max)
+                                                }
+                                                let combinedFhirCard = min + ".." + max
+                                                cardinalityIsCombined = (combinedFhirCard != fhirCard)
+                                                fhirCard = combinedFhirCard
+                                            }
+    
+                                            let level = IssueLevel.OK
+                                            if (fhirCard != conceptCard) {
+                                                // if fhir has stricter cardinality then error
+                                                level = (conceptCard.endsWith("..*")) ? IssueLevel.ERROR : IssueLevel.WARNING;
+                                            }
+                                            elementReport.addConceptReport("cardinality", conceptCard, fhirCard + (cardinalityIsCombined ? " (effective)" : ""), level)
+                                        }
                                     }
 
                                     elementReport.addConceptReport("short", conceptNameEN, fhirShort, (conceptNameEN != fhirShort) ? IssueLevel.WARNING : IssueLevel.OK)
@@ -768,47 +830,7 @@ argv.files.forEach(filename => {
                                             elementReport.addConceptReport("datatype", conceptDt, fhirDt, isCompatible)
                                         }
                                     }
-                                    if (concept.cardinality) {
-                                        // Get the zib cardinality, or its overridden value.
-                                        let conceptCard = zibOverrides.check(resource.id, element.id, "cardinality");
-                                        if (conceptCard == null) {
-                                            if (element.id.split(".").length == 1) { // Root element cannot have another cardinality than 0..*, so ignore the zib cardinality here
-                                                conceptCard = "0..*";
-                                            } else {
-                                                conceptCard = concept.cardinality;
-                                            }
-                                        }
 
-                                        // Get the cardinality of the mapped FHIR element
-                                        var fhirCard = element.min + ".." + element.max;
-                                        // Handle the common case where the element is mapped onto Extension.value[x].
-                                        // In this case, the cardinality of the element itself should be combined with
-                                        // the cardinality of the extension root (eg. if .value is required but the
-                                        // extension use itself is optional, the result is that the value is optional).
-                                        let cardinalityIsCombined = false
-                                        let extensionCheck = element.id.match(/(.*)\.extension:([^\s\.]+)\.value\[x\]/)
-                                        if (extensionCheck && !extensionCheck[1].includes("extension:")) { // Ignore complex extensions because of co-dependencies
-                                            let extensionRootPath = extensionCheck[1] + ".extension:" + extensionCheck[2]
-                                            let extensionRoot = resource.snapshot.element.filter(element => element.id == extensionRootPath)[0]
-                                            let min = parseInt(element.min) * parseInt(extensionRoot.min)
-                                            let max
-                                            if (element.max == "*" || extensionRoot.max == "*") {
-                                                max = "*"
-                                            } else {
-                                                max = parseInt(element.max) * parseInt(extensionRoot.max)
-                                            }
-                                            let combinedFhirCard = min + ".." + max
-                                            cardinalityIsCombined = (combinedFhirCard != fhirCard)
-                                            fhirCard = combinedFhirCard
-                                        }
-
-                                        let level = IssueLevel.OK
-                                        if (fhirCard != conceptCard) {
-                                            // if fhir has stricter cardinality then error
-                                            level = (conceptCard.endsWith("..*")) ? IssueLevel.ERROR : IssueLevel.WARNING;
-                                        }
-                                        elementReport.addConceptReport("cardinality", conceptCard, fhirCard + (cardinalityIsCombined ? " (effective)" : ""), level)
-                                    }
                                     profileReport.addElementReport(elementReport)
                                 }
                             });
@@ -826,17 +848,22 @@ argv.files.forEach(filename => {
 
 // show unmapped zibIds
 if (argv["check-missing"] != "none") {
-    Object.keys(_conceptsById).forEach(zibId => {
-        if (_zibIdsMapped.indexOf(zibId) == -1) {
-            // ignore containers and rootconcepts
-            if (!zibOverrides.hasUnmapped(zibId) && (_conceptsById[zibId].stereotype != "container" && _conceptsById[zibId].stereotype != "rootconcept")) {
-                
-                let cmPrefix = getCMPrefix(zibId)
-                if (argv["check-missing"] == "all" || cmPrefixes.has(cmPrefix)) {
-                    var parentId = _conceptsById[zibId].parentId;
+    let cmPrefixesMapped = new Set()
+    if (argv["check-missing"] == "mapped-only") {
+        // Construct a list of all CM: prefixes that are mapped
+        zibIdsMapped.forEach(zibId => cmPrefixesMapped.add(getCMPrefix(zibId)))
+    }
 
+    Object.keys(_conceptsById).forEach(zibId => {
+        if (!zibIdsMapped.has(zibId)) {
+
+            // ignore containers, rootconcepts and explicitly excluded concept ids
+            if (!(_conceptsById[zibId].stereotype == "container" || _conceptsById[zibId].stereotype == "rootconcept" || zibOverrides.hasUnmapped(zibId))) {
+                
+                if (argv["check-missing"] == "all" || (argv["check-missing"] == "mapped-only" && cmPrefixesMapped.has(getCMPrefix(zibId)))) {
                     // find rootconcept with this concept
-                    var rootconcept = zibs.model.objects[0].object.find(obj => obj.stereotype == "rootconcept" && obj.parentId[0] == parentId[0]);
+                    let parentId = _conceptsById[zibId].parentId;
+                    let rootconcept = zibs.model.objects[0].object.find(obj => obj.stereotype == "rootconcept" && obj.parentId[0] == parentId[0]);
                     if (rootconcept) {
                         report.addIssue("not mapped " + rootconcept.name + "." + _conceptsById[zibId].name + " " + zibId, IssueLevel.WARNING)
                     } else {
@@ -854,7 +881,7 @@ report.write(argv["output-format"])
 // Print some statistics
 let statistics = {
     "zibConceptIds": Object.keys(_conceptsById).length,
-    "mappedConcepts": _zibIdsMapped.length,
+    "mappedConcepts": zibIdsMapped.size,
     "issueStats": report.getStatistics()
 }
 
@@ -875,24 +902,6 @@ if (argv["stats-file"]) {
 if (statistics.issueStats.error > 0 || (statistics.issueStats.warning > 0 && argv["fail-at"] == "warning")) {
     console.error("\nThere were errors below your threshold. The test has FAILED.");
     process.exit(1);
-}
-
-/**
- * Return the English name for the zib concept represented by the given FHIR element. If multiple zib concepts are
- * represented on the same element, they will be concatenated, seperated by " / " (when unique).
- * @param {*} element 
- */
-function constructConceptNameEN(element) {
-    let conceptNames = [];
-    element.mapping.forEach(mapping => {
-        if (zibRegEx.test(mapping.identity)) {
-            // Cut of "EN: ", and cut off the part after "::" if it is a reference
-            let conceptName = _conceptsById[mapping.map].alias[0].substring(3).trim().split("::")[0]
-            conceptNames.push(conceptName)
-        }
-    })
-    conceptNames = [...new Set(conceptNames)];
-    return conceptNames.join(" / ");
 }
 
 /**
