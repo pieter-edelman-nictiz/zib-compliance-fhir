@@ -45,11 +45,8 @@ const argv = yargs
         choices: ['error', 'warning'],
         default: 'error'
     }).option('zib-overrides', {
-        description: 'YAML file specifying zib concepts that are purposefully not mapped faithfully to the profiles. This file should look like:\n\n>  [resource id]:\n>    zib deviations:\n>      [element id]:\n>        - [deviation]: [value]\n>          reason: [Explanation for deviation]\n>  unmapped zib concepts:\n>    - [zib concept id]: [zib concept name]\n>      reason: [Explanation for not mapping]\n\nWhere [deviation] can be "cardinality", "datatype", "short" or "alias". For each element, multiple deviations may be specified. Note that for each deviation, a reason *must* be provided.',
-        type: 'string'
-    }).option('ephemeral-overrides', {
-        description: 'YAML file specifying zib concepts that are purposefully not mapped faithfully to the profiles. This file should look like:\n\n>  [resource id]:\n>    zib deviations:\n>      [element id]:\n>        - [deviation]: [value]\n>          reason: [Explanation for deviation]\n>  unmapped zib concepts:\n>    - [zib concept id]: [zib concept name]\n>      reason: [Explanation for not mapping]\n\nWhere [deviation] can be "cardinality", "datatype", "short" or "alias". For each element, multiple deviations may be specified. Note that for each deviation, a reason *must* be provided.',
-        type: 'string'
+        description: 'One or more YAML files specifying zib concepts that are purposefully not mapped faithfully to the profiles. This file should look like:\n\n>  [resource id]:\n>    zib deviations:\n>      [element id]:\n>        - [deviation]: [value]\n>          reason: [Explanation for deviation]\n>  unmapped zib concepts:\n>    - [zib concept id]: [zib concept name]\n>      reason: [Explanation for not mapping]\n\nWhere [deviation] can be "cardinality", "datatype", "short" or "alias". For each element, multiple deviations may be specified. Note that for each deviation, a reason *must* be provided.',
+        type: 'array'
     }).option('output-format', {
         alias: 'f',
         description: 'Set the output format to either text or XML.\nIn both cases, the output will be printed to stdout.\nWhen the output is XML, a complete record of all found elements is created, while additional problems are printed to stderr.\nWhen the output format is text, only the issues found are printed.',
@@ -562,17 +559,22 @@ class ZibOverrides {
     /**
      * @param {string|null} path - path to the YAML file. May be empty, in which case this class won't do much.
      */
-    constructor(path = null, require_occurence = true) {
+    constructor(path = null) {
         this.overrides = null
-        this.load(path, require_occurence)
+        this.load(path)
     }
 
-    load(path = null, require_occurence = true) {
+    load(path = null) {
         if (path == null) return
         if (this.overrides == null) {
             this.overrides = {}
         }
         let overrides = yaml.safeLoad(fs.readFileSync(path, 'utf8'))
+        let require_occurence = true
+        if ("issues should occur" in ignored_issues) {
+            require_occurence = (ignored_issues["issues should occur"] == true)
+            delete ignored_issues["issues should occur"]
+        }
         Object.keys(overrides).forEach(resource_id => {
             if ("zib deviations" in overrides[resource_id]) {
                 let resource_regex = "^" + resource_id.replace(".", "\\.").replace("*", ".*?") + "$"
@@ -655,8 +657,8 @@ class ZibOverrides {
         return is_unmapped;
     }
 }
-var zibOverrides = new ZibOverrides(argv["zib-overrides"]);
-zibOverrides.load(argv["ephemeral-overrides"])
+var zibOverrides = new ZibOverrides()
+argv["zib-overrides"].forEach(overridesFile => zibOverrides.load(overridesFile))
 
 // Collect als zib ids that are mapped in the supplied StructureDefinitions
 let zibIdsMapped = new Set()
