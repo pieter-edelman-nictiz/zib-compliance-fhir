@@ -46,7 +46,7 @@ const argv = yargs
         default: 'error'
     }).option('zib-overrides', {
         description: 'One or more YAML files specifying zib concepts that are purposefully not mapped faithfully to the profiles. This file should look like:\n\n>  [resource id]:\n>    zib deviations:\n>      [element id]:\n>        - [deviation]: [value]\n>          reason: [Explanation for deviation]\n>  unmapped zib concepts:\n>    - [zib concept id]: [zib concept name]\n>      reason: [Explanation for not mapping]\n\nWhere [deviation] can be "cardinality", "datatype", "short" or "alias". For each element, multiple deviations may be specified. Note that for each deviation, a reason *must* be provided.',
-        type: 'array'
+        type: 'string'
     }).option('output-format', {
         alias: 'f',
         description: 'Set the output format to either text or XML.\nIn both cases, the output will be printed to stdout.\nWhen the output is XML, a complete record of all found elements is created, while additional problems are printed to stderr.\nWhen the output format is text, only the issues found are printed.',
@@ -569,28 +569,29 @@ class ZibOverrides {
         if (this.overrides == null) {
             this.overrides = {}
         }
-        let overrides = yaml.safeLoad(fs.readFileSync(path, 'utf8'))
-        let require_occurence = true
-        if ("issues should occur" in ignored_issues) {
-            require_occurence = (ignored_issues["issues should occur"] == true)
-            delete ignored_issues["issues should occur"]
-        }
-        Object.keys(overrides).forEach(resource_id => {
-            if ("zib deviations" in overrides[resource_id]) {
-                let resource_regex = "^" + resource_id.replace(".", "\\.").replace("*", ".*?") + "$"
-                let issues_for_resource = (resource_regex in this.overrides) ? this.overrides[resource_regex] : {}
-                Object.keys(overrides[resource_id]["zib deviations"]).forEach(path_id => {
-                    let path_regex = "^" + path_id.replace(".", "\\.").replace("*", ".*?").replace("[", "\\[").replace("]", "\\]") + "$"
-                    let issues_for_path = (path_regex in issues_for_resource) ? issues_for_resource[path_regex] : []
-                    overrides[resource_id]["zib deviations"][path_id].forEach(issue => {
-                        issue["handled"]          = false
-                        issue["require_presence"] = require_occurence
-                        issues_for_path.push(issue)
-                    })
-                    issues_for_resource[path_regex] = issues_for_path
-                })
-                this.overrides[resource_regex] = issues_for_resource
+        yaml.loadAll(fs.readFileSync(path, 'utf8'), overrides => {
+            let require_occurence = true
+            if ("issues should occur" in overrides) {
+                require_occurence = (overrides["issues should occur"] == true)
+                delete overrides["issues should occur"]
             }
+            Object.keys(overrides).forEach(resource_id => {
+                if ("zib deviations" in overrides[resource_id]) {
+                    let resource_regex = "^" + resource_id.replace(".", "\\.").replace("*", ".*?") + "$"
+                    let issues_for_resource = (resource_regex in this.overrides) ? this.overrides[resource_regex] : {}
+                    Object.keys(overrides[resource_id]["zib deviations"]).forEach(path_id => {
+                        let path_regex = "^" + path_id.replace(".", "\\.").replace("*", ".*?").replace("[", "\\[").replace("]", "\\]") + "$"
+                        let issues_for_path = (path_regex in issues_for_resource) ? issues_for_resource[path_regex] : []
+                        overrides[resource_id]["zib deviations"][path_id].forEach(issue => {
+                            issue["handled"]          = false
+                            issue["require_presence"] = require_occurence
+                            issues_for_path.push(issue)
+                        })
+                        issues_for_resource[path_regex] = issues_for_path
+                    })
+                    this.overrides[resource_regex] = issues_for_resource
+                }
+            })    
         })
     }
 
@@ -627,7 +628,6 @@ class ZibOverrides {
             console.error(`Conflicting zib deviations were defined for '${key}' in ${resourceId} (${elementId})`)
             process.exit(1);
         } else if (overridden.size == 1) {
-            console.log(overridden.keys().next().value)
             return overridden.keys().next().value
         }
         return null
@@ -658,7 +658,11 @@ class ZibOverrides {
     }
 }
 var zibOverrides = new ZibOverrides()
-argv["zib-overrides"].forEach(overridesFile => zibOverrides.load(overridesFile))
+if (typeof(argv["zib-overrides"]) == "string") {
+    zibOverrides.load(argv["zib-overrides"])
+} else if (typeof(argv["zib-overrides"]) == "array") {
+    argv["zib-overrides"].forEach(overridesFile => zibOverrides.load(overridesFile))
+}
 
 // Collect als zib ids that are mapped in the supplied StructureDefinitions
 let zibIdsMapped = new Set()
