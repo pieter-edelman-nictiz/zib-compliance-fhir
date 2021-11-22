@@ -45,7 +45,7 @@ const argv = yargs
         choices: ['error', 'warning'],
         default: 'error'
     }).option('zib-overrides', {
-        description: 'One or more YAML files specifying zib concepts that are purposefully not mapped faithfully to the profiles. This file should look like:\n\n>  [resource id]:\n>    zib deviations:\n>      [element id]:\n>        - [deviation]: [value]\n>          reason: [Explanation for deviation]\n>  unmapped zib concepts:\n>    - [zib concept id]: [zib concept name]\n>      reason: [Explanation for not mapping]\n\nWhere [deviation] can be "cardinality", "datatype", "short" or "alias". For each element, multiple deviations may be specified. Note that for each deviation, a reason *must* be provided.',
+        description: 'A YAML file specifying zib concepts that are purposefully not mapped faithfully to the profiles. This file should look like:\n\n>  [resource id]:\n>    zib deviations:\n>      [element id]:\n>        - [deviation]: [value]\n>          reason: [Explanation for deviation]\n>  unmapped zib concepts:\n>    - [zib concept id]: [zib concept name]\n>      reason: [Explanation for not mapping]\n\nWhere [deviation] can be "cardinality", "datatype", "short" or "alias". For each element, multiple deviations may be specified. Note that for each deviation, a reason *must* be provided.\nMultiple documents may be present in the YAML file. This flag may also be used multiple times to specify more than one YAML file.',
         type: 'string'
     }).option('output-format', {
         alias: 'f',
@@ -584,7 +584,7 @@ class ZibOverrides {
                         let issues_for_path = (path_regex in issues_for_resource) ? issues_for_resource[path_regex] : []
                         overrides[resource_id]["zib deviations"][path_id].forEach(issue => {
                             issue["handled"]          = false
-                            issue["require_presence"] = require_occurence
+                            issue["require_occurence"] = require_occurence
                             issues_for_path.push(issue)
                         })
                         issues_for_resource[path_regex] = issues_for_path
@@ -597,13 +597,16 @@ class ZibOverrides {
 
     /**
      * Check if there's a deviation from the zib for the concept of the given element in the given resource.
+     * If the overridden value is the same as the value expected by the zib while the issue should occur, an error is
+     * raised.
      * 
      * @param {string} resourceId - the resource.id of the current resource
      * @param {string} elementId - the id of the element
      * @param {string} key - either cardinality, datatype, alias or 
-     * @returns {null|string} - the overridden value, if found.
+     * @param {string} zibValue - the value as expected by the zib
+     * @returns {null|string} - the overridden value, if found, or the zib value as provided by zibValue otherwise.
      */
-    check(resourceId, elementId, key) {
+    check(resourceId, elementId, key, zibValue) {
         if (this.overrides == null) return null
 
         let overridden = new Set();
@@ -614,7 +617,11 @@ class ZibOverrides {
                         this.overrides[resourceRegex][pathRegex].filter(knownIssue => key in knownIssue).forEach(knownIssue => {
                             if (!("reason" in knownIssue)) {
                                 console.error(`Missing reason for overriding '${key}' in ${resourceId} (${elementId})`)
-                                process.exit(1);
+                                process.exit(1)
+                            }
+                            if (knownIssue[key] == zibValue && knownIssue["require_occurence"]) {
+                                console.error(`Overridden value for ${key} on ${elementId} in ${resourceId} is the actual zib value!`)
+                                process.exit(1)
                             }
                             knownIssue["handled"] = true
                             overridden.add(knownIssue[key])
@@ -630,7 +637,7 @@ class ZibOverrides {
         } else if (overridden.size == 1) {
             return overridden.keys().next().value
         }
-        return null
+        return zibValue
     }
 
     /**
@@ -721,8 +728,8 @@ argv.files.forEach(filename => {
                                     let fhirShort = element.short.toString()
                                     let fhirAlias = element.alias ? element.alias.toString() : ''
 
-                                    let conceptNameEN = zibOverrides.check(resource.id, element.id, "short")
-                                    let conceptNameNL = zibOverrides.check(resource.id, element.id, "alias")
+                                    let conceptNameEN
+                                    let conceptNameNL
 
                                     let concept = _conceptsById[mapping.map];
                                     if (!concept) {
@@ -735,12 +742,8 @@ argv.files.forEach(filename => {
                                         // direction of what the zib specifies, short and alias should be set to the
                                         // target of the reference.
                                         let rootconcept = _conceptsById[getCMPrefix(mapping.map) + ".1"]
-                                        if (conceptNameEN == null) {
-                                            conceptNameEN = rootconcept.alias[0].substring(3).trim()
-                                        }
-                                        if (conceptNameNL == null) {
-                                            conceptNameNL = rootconcept.name[0]
-                                        }
+                                        conceptNameEN = zibOverrides.check(resource.id, element.id, "short", rootconcept.alias[0].substring(3).trim())
+                                        conceptNameNL = zibOverrides.check(resource.id, element.id, "alias", rootconcept.name[0])
                                     } else {
                                         if (conceptNameEN == null) {
                                             let conceptNames = [];
@@ -753,69 +756,60 @@ argv.files.forEach(filename => {
                                             })
                                             conceptNameEN = [...new Set(conceptNames)].join(" / ")
                                         }
-                                        if (conceptNameNL == null) {
-                                            // Cut of the part after "::" if it is a reference
-                                            conceptNameNL = concept.name.toString().split("::")[0];
-                                        }
+                                        conceptNameEN = zibOverrides.check(resource.id, element.id, "short", conceptNameEN)
+                                        conceptNameNL = zibOverrides.check(resource.id, element.id, "alias", concept.name.toString().split("::")[0]) // Cut of the part after "::" if it is a reference
 
                                         if (concept.cardinality) {
                                             // Get the zib cardinality, or its overridden value.
-                                            let conceptCard = zibOverrides.check(resource.id, element.id, "cardinality");
-                                            if (conceptCard == null) {
-                                                if (element.id.split(".").length == 1) { // Root element cannot have another cardinality than 0..*, so ignore the zib cardinality here
-                                                    conceptCard = "0..*";
-                                                } else {
-                                                    conceptCard = concept.cardinality;
+                                            if (element.id.split(".").length != 1 && concept.stereotype[0] != "rootconcept") { // Both a FHIR root element and a zib root element cannot have another cardinality than 0..*, so skipt the zib cardinality check here
+                                                let conceptCard = zibOverrides.check(resource.id, element.id, "cardinality", concept.cardinality)
+        
+                                                // Get the cardinality of the mapped FHIR element
+                                                var fhirCard = element.min + ".." + element.max;
+
+                                                // Handle the common case where the element is mapped onto Extension.value[x].
+                                                // In this case, the cardinality of the element itself should be combined with
+                                                // the cardinality of the extension root (eg. if .value is required but the
+                                                // extension use itself is optional, the result is that the value is optional).
+                                                let cardinalityIsCombined = false
+                                                let extensionCheck = element.id.match(/(.*)\.extension:([^\s\.]+)\.value\[x\]/)
+                                                if (extensionCheck && !extensionCheck[1].includes("extension:")) { // Ignore complex extensions because of co-dependencies
+                                                    let extensionRootPath = extensionCheck[1] + ".extension:" + extensionCheck[2]
+                                                    let extensionRoot = resource.snapshot.element.filter(element => element.id == extensionRootPath)[0]
+                                                    let min = parseInt(element.min) * parseInt(extensionRoot.min)
+                                                    let max
+                                                    if (element.max == "*" || extensionRoot.max == "*") {
+                                                        max = "*"
+                                                    } else {
+                                                        max = parseInt(element.max) * parseInt(extensionRoot.max)
+                                                    }
+                                                    let combinedFhirCard = min + ".." + max
+                                                    cardinalityIsCombined = (combinedFhirCard != fhirCard)
+                                                    fhirCard = combinedFhirCard
                                                 }
-                                            }
-    
-                                            // Get the cardinality of the mapped FHIR element
-                                            var fhirCard = element.min + ".." + element.max;
-                                            // Handle the common case where the element is mapped onto Extension.value[x].
-                                            // In this case, the cardinality of the element itself should be combined with
-                                            // the cardinality of the extension root (eg. if .value is required but the
-                                            // extension use itself is optional, the result is that the value is optional).
-                                            let cardinalityIsCombined = false
-                                            let extensionCheck = element.id.match(/(.*)\.extension:([^\s\.]+)\.value\[x\]/)
-                                            if (extensionCheck && !extensionCheck[1].includes("extension:")) { // Ignore complex extensions because of co-dependencies
-                                                let extensionRootPath = extensionCheck[1] + ".extension:" + extensionCheck[2]
-                                                let extensionRoot = resource.snapshot.element.filter(element => element.id == extensionRootPath)[0]
-                                                let min = parseInt(element.min) * parseInt(extensionRoot.min)
-                                                let max
-                                                if (element.max == "*" || extensionRoot.max == "*") {
-                                                    max = "*"
-                                                } else {
-                                                    max = parseInt(element.max) * parseInt(extensionRoot.max)
+        
+                                                let level = IssueLevel.OK
+                                                if (fhirCard != conceptCard) {
+                                                    // if fhir has stricter cardinality then error
+                                                    level = (conceptCard.endsWith("..*")) ? IssueLevel.ERROR : IssueLevel.WARNING;
                                                 }
-                                                let combinedFhirCard = min + ".." + max
-                                                cardinalityIsCombined = (combinedFhirCard != fhirCard)
-                                                fhirCard = combinedFhirCard
+                                                elementReport.addConceptReport("cardinality", conceptCard, fhirCard + (cardinalityIsCombined ? " (effective)" : ""), level)
                                             }
-    
-                                            let level = IssueLevel.OK
-                                            if (fhirCard != conceptCard) {
-                                                // if fhir has stricter cardinality then error
-                                                level = (conceptCard.endsWith("..*")) ? IssueLevel.ERROR : IssueLevel.WARNING;
-                                            }
-                                            elementReport.addConceptReport("cardinality", conceptCard, fhirCard + (cardinalityIsCombined ? " (effective)" : ""), level)
                                         }
                                     }
 
                                     elementReport.addConceptReport("short", conceptNameEN, fhirShort, (conceptNameEN != fhirShort) ? IssueLevel.WARNING : IssueLevel.OK)
                                     elementReport.addConceptReport("alias", conceptNameNL, fhirAlias, (fhirAlias.indexOf(conceptNameNL) == -1) ? IssueLevel.WARNING : IssueLevel.OK)
 
-                                    let conceptDt = zibOverrides.check(resource.id, element.id, "datatype");
                                     if (concept.datatype) {
                                         let fhirDt = undefined;
                                         if (element.type) {
-                                            fhirDt = element.type[0].code;
+                                            fhirDt = element.type[0].code
                                         } else if (element.id.indexOf(".") == -1 && ["primitive-type", "complex-type"].includes(resource.kind)) { // Root element of datatype profile
-                                            fhirDt = resource.type;
+                                            fhirDt = resource.type
                                         }
                                         var isCompatible;
-                                        if (conceptDt == null) {
-                                            conceptDt = concept.datatype;
-                                        }
+                                        let conceptDt = zibOverrides.check(resource.id, element.id, "datatype", concept.datatype)
                                         if (conceptDt == fhirDt) isCompatible = IssueLevel.OK;
                                         else if (concept.datatype == 'II' && fhirDt == "Identifier") isCompatible = IssueLevel.OK;
                                         else if (concept.datatype == 'ST' && ["string", "markdown"].includes(fhirDt)) isCompatible = IssueLevel.OK;
@@ -845,13 +839,7 @@ argv.files.forEach(filename => {
                                         var tag1 = concept.tag.find(tag => tag.$.name === 'DCM::ReferencedConceptId');
                                         var tag2 = concept.tag.find(tag => tag.$.name === 'DCM::ReferencedDefinitionCode');
                                         var fhirDt = (element.type?element.type[0].code : "undefined");
-                                        if (conceptDt == null) {
-                                            if (tag1 || tag2) {
-                                                conceptDt = "Reference";
-                                            } else {
-                                                conceptDt = concept.stereotype;
-                                            }
-                                        }
+                                        let conceptDt = zibOverrides.check(resource.id, element.id, "datatype", (tag1 || tag2) ? "Reference" : concept.stereotype[0])
                                         if (conceptDt == "Reference") {
                                             elementReport.addConceptReport("datatype", conceptDt, fhirDt, (fhirDt != "Reference") ? IssueLevel.WARNING:IssueLevel.OK)
                                         } else {
