@@ -640,7 +640,8 @@ class ZibOverrides {
      * @param {string|null} path - path to the YAML file. May be empty, in which case this class won't do much.
      */
     constructor(path = null) {
-        this.overrides = null
+        this.overrides         = null
+        this.unmapped_concepts = null
         this.load(path)
     }
 
@@ -649,11 +650,23 @@ class ZibOverrides {
         if (this.overrides == null) {
             this.overrides = {}
         }
+        if (this.unmapped_concepts == null) {
+            this.unmapped_concepts = {}
+        }
         yaml.loadAll(fs.readFileSync(path, 'utf8'), overrides => {
             let require_occurence = true
             if ("issues should occur" in overrides) {
                 require_occurence = (overrides["issues should occur"] == true)
                 delete overrides["issues should occur"]
+            }
+            if ("unmapped zib concepts" in overrides) {
+                overrides["unmapped zib concepts"].forEach(unmapped => {
+                    let key = Object.keys(unmapped).filter(key => key.startsWith("NL-CM:"))
+                    unmapped["handled"]           = false
+                    unmapped["require_occurence"] = require_occurence
+                    this.unmapped_concepts[key] = unmapped
+                })
+                delete overrides["unmapped zib concepts"]
             }
             Object.keys(overrides).forEach(resource_id => {
                 if ("zib deviations" in overrides[resource_id]) {
@@ -663,7 +676,7 @@ class ZibOverrides {
                         let path_regex = "^" + path_id.replace(".", "\\.").replace("*", ".*?").replace("[", "\\[").replace("]", "\\]") + "$"
                         let issues_for_path = (path_regex in issues_for_resource) ? issues_for_resource[path_regex] : []
                         overrides[resource_id]["zib deviations"][path_id].forEach(issue => {
-                            issue["handled"]          = false
+                            issue["handled"]           = false
                             issue["require_occurence"] = require_occurence
                             issues_for_path.push(issue)
                         })
@@ -727,21 +740,30 @@ class ZibOverrides {
      * @returns {boolean}
      */
     hasUnmapped(zibId) {
-        if (this.overrides == null) return null
+        if (this.unmapped_concepts == null) return null
 
-        let is_unmapped = false;
-        if ("unmapped zib concepts" in this.overrides) {
-            this.overrides["unmapped zib concepts"].forEach(unmapped => {
-                if (zibId in unmapped) {
-                    if (!("reason" in unmapped)) {
-                        console.error(`Missing reason for unmapped '${zibId}'`)
-                        process.exit(1);
-                    }
-                    is_unmapped = true;
-                }
-            })
+        if (zibId in this.unmapped_concepts) {
+            let unmapped = this.unmapped_concepts[zibId]
+            if (!("reason" in unmapped)) {
+                console.error(`Missing reason for unmapped '${zibId}'`)
+                process.exit(1)
+            }
+            unmapped["handled"] = true
+            return true
         }
-        return is_unmapped;
+        return false
+    }
+
+    /**
+     * Get the NL-CM concept codes that were marked as unmapped but didn't raise an issue yet. Only entries that were
+     * marked as required to occur are included.
+     * @returns An array of NL-CM concept codes.
+     */
+    getUnhandledUnmapped() {
+        if (this.unmapped_concepts !== null) {
+            return Object.keys(this.unmapped_concepts).filter(key => this.unmapped_concepts[key]["handled"] == false && this.unmapped_concepts[key]["require_occurence"] == true)
+        }
+        return []
     }
 }
 var zibOverrides = new ZibOverrides()
@@ -934,6 +956,7 @@ argv.files.forEach(filename => {
 // show unmapped zibIds
 if (argv["check-missing"] != "none") {
     let cmPrefixesMapped = new Set()
+
     if (argv["check-missing"] == "mapped-only") {
         // Construct a list of all CM: prefixes that are mapped
         zibIdsMapped.forEach(zibId => cmPrefixesMapped.add(getCMPrefix(zibId)))
@@ -957,7 +980,21 @@ if (argv["check-missing"] != "none") {
                 }
             }
         }
-    });
+    })
+
+    // Handle the concepts that were marked as unmapped but occurred anyway.
+    if (argv["check-missing"] == "mapped-only") {
+        zibOverrides.getUnhandledUnmapped().forEach(unhandledId => {
+            console.log(unhandledId, getCMPrefix(unhandledId), cmPrefixesMapped.has(getCMPrefix(unhandledId)))
+            if (cmPrefixesMapped.has(getCMPrefix(unhandledId))) {
+                report.addIssue(`${unhandledId} was described as unmapped, while it was actually mapped!`, IssueLevel.ERROR)
+            }
+        })
+    } else if (argv["check-missing"] == "all") {
+        zibOverrides.getUnhandledUnmapped().forEach(unhandledId => {
+            report.addIssue(`${unhandledId} was described as unmapped, while it was actually mapped!`, IssueLevel.ERROR)
+        })
+    }
 }
 
 // Write the result to stdout/stderr
