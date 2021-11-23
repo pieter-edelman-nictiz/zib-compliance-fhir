@@ -546,10 +546,90 @@ zibs.model.objects[0].object.forEach(object => {
                 // FHIR min cardinality for zib profiles must always be zero. See 
                 // https://zibs.nl/wiki/Zib_kardinaliteiten for more information. 
                 let minAndMax = card.split("..");
-                object.cardinality = `0..${minAndMax[1]}`;            }
+                object.cardinality = `0..${minAndMax[1]}`;
+            }
         }
     }
 });
+
+/**
+ * Try to calculate the effective cardinality of en element, that is, the min and max values of this element multiplied
+ * by the min and max of all its parents.
+ * 
+ * This is _only_ done if it can be reasonably assumed there are no co-dependencies that would somehow end up
+ * restricting the use of this element. This is simply done by checking:
+ * - If there are definitions placed on the sibling elements
+ * - If one of the sibling elements has min cardinality other than 0
+ * 
+ * If any of these conditions are met somewhere along the path to the root, no attempt is made to calculate the
+ * effective cardinality. The only exception is the common patter of using Observation.component, where .code will be
+ * fixed.
+ * @param {Object} element - The element for which the effective cardinality should be calculated
+ * @param {Object} resource - The complete resource as JSON object
+ * @returns The effecive cardinality of array as [min, max]. If no effective cardinality could be calculated, this is
+ *          just the cardinality of the element itself.
+ */
+function getEffectiveCardinality(element, resource) {
+    /**
+     * Helper function to recursively walk down the path and calculate the effective cardinality
+     * @param {string} elementId 
+     * @param {Array} leafIds - a list of leaf id's (that we should ignore when finding siblings)
+     * @param {Array} cardinality - the current effective cardinality in the form of [min, max]
+     * @returns the effective cardinality as [min, max] or false if no effective cardinality could be calculated
+     */
+    function _getCombinedCardinality(elementId, leafIds, cardinality) {
+        if (elementId.indexOf(".") != elementId.lastIndexOf(".")) { // If we're not at the root yet
+            leafIds.push(elementId)
+            let parentId = (elementId.slice(0, elementId.lastIndexOf(".")))
+            let parent = resource.snapshot.element.filter(entry => entry.id == parentId)[0]
+            
+            // For complex extensions, the situation is a bit, well, complex. Say we're now at
+            // extension:foo.extension:bar This cannot contain siblings, so the check will come up empty. But when we,
+            // descend, extension:foo.extension will "polute" the siblings -- this element it is used to define a
+            // discriminator but nothing else. So we'll add this path to the leafIds.
+            let extMatch = elementId.match(/^(.*)\.extension:[^\.]+$/m)
+            if (extMatch) {
+                leafIds.push(extMatch[1] + ".extension")
+            }
+
+            // Get all siblings, descendants and descendants of siblings defined in the differential
+            let differentialSiblings = resource.differential.element.filter(entry => (!leafIds.includes(entry.id) && entry.id.startsWith(parentId + ".")))
+            let differentialSiblingIds = differentialSiblings.map(entry => entry.id)
+
+            // Get all real siblings from the snapshot
+            let siblingRegEx = new RegExp(`^${parentId}\.[^\.]+$`, "m")
+            let snapshotSiblings = resource.snapshot.element.filter(entry => (entry.id && entry.id != elementId && entry.id.match(siblingRegEx)))
+            let snapshotSiblingsMin = snapshotSiblings.reduce((min, entry) => parseInt(min) + parseInt(entry.min), 0)
+
+            let min = cardinality[0]
+            let max = cardinality[1]
+
+            // Cowardly refuse to to calculate the combined cardinality if there are definitions placed on sibling
+            // elements or if there are required sibling elements
+            if ((differentialSiblingIds.length == 0 && snapshotSiblingsMin == 0) ||
+                (elementId.startsWith("Observation.component") && differentialSiblings.length == 1 && differentialSiblings[0].id.endsWith(".code"))) { // Observation.component exception
+                min = parseInt(cardinality[0]) * parseInt(parent.min)
+                
+                if (cardinality[1] == "*" || parent.max == "*") {
+                    max = "*"
+                } else {
+                    max = parseInt(cardinality[1]) * parseInt(parent.max)
+                }
+                cardinality = _getCombinedCardinality(parentId, leafIds, [min, max])
+            } else {
+                return false
+            }
+        }
+        return cardinality
+    }
+
+    let cardinality = [element.min, element.max]
+    let effectiveCardinality = _getCombinedCardinality(element.id, [], [element.min, element.max])
+    if (effectiveCardinality) {
+        return effectiveCardinality
+    }
+    return cardinality
+}
 
 /**
  * Class to handle purposeful deviations from the zib values in profiles, described in a YAML file. See the help for a
@@ -764,29 +844,9 @@ argv.files.forEach(filename => {
                                             if (element.id.split(".").length != 1 && concept.stereotype[0] != "rootconcept") { // Both a FHIR root element and a zib root element cannot have another cardinality than 0..*, so skipt the zib cardinality check here
                                                 let conceptCard = zibOverrides.check(resource.id, element.id, "cardinality", concept.cardinality)
         
-                                                // Get the cardinality of the mapped FHIR element
-                                                var fhirCard = element.min + ".." + element.max;
-
-                                                // Handle the common case where the element is mapped onto Extension.value[x].
-                                                // In this case, the cardinality of the element itself should be combined with
-                                                // the cardinality of the extension root (eg. if .value is required but the
-                                                // extension use itself is optional, the result is that the value is optional).
-                                                let cardinalityIsCombined = false
-                                                let extensionCheck = element.id.match(/(.*)\.extension:([^\s\.]+)\.value\[x\]/)
-                                                if (extensionCheck && !extensionCheck[1].includes("extension:")) { // Ignore complex extensions because of co-dependencies
-                                                    let extensionRootPath = extensionCheck[1] + ".extension:" + extensionCheck[2]
-                                                    let extensionRoot = resource.snapshot.element.filter(element => element.id == extensionRootPath)[0]
-                                                    let min = parseInt(element.min) * parseInt(extensionRoot.min)
-                                                    let max
-                                                    if (element.max == "*" || extensionRoot.max == "*") {
-                                                        max = "*"
-                                                    } else {
-                                                        max = parseInt(element.max) * parseInt(extensionRoot.max)
-                                                    }
-                                                    let combinedFhirCard = min + ".." + max
-                                                    cardinalityIsCombined = (combinedFhirCard != fhirCard)
-                                                    fhirCard = combinedFhirCard
-                                                }
+                                                let effectiveCard = getEffectiveCardinality(element, resource)
+                                                let cardinalityIsCombined = (element.min != effectiveCard[0] || element.max != effectiveCard[1])
+                                                fhirCard = effectiveCard[0] + ".." + effectiveCard[1]
         
                                                 let level = IssueLevel.OK
                                                 if (fhirCard != conceptCard) {
