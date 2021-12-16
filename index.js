@@ -670,7 +670,7 @@ class ZibOverrides {
             }
             Object.keys(overrides).forEach(resource_id => {
                 if ("zib deviations" in overrides[resource_id]) {
-                    let resource_regex = "^" + resource_id.replace(".", "\\.").replace("*", ".*?") + "$"
+                    let resource_regex = "^" + resource_id.replace(/\./g, "\\.").replace(/\*/g, ".*?") + "$"
                     let issues_for_resource = (resource_regex in this.overrides) ? this.overrides[resource_regex] : {}
                     Object.keys(overrides[resource_id]["zib deviations"]).forEach(path_id => {
                         let path_regex = "^" + path_id.replace(".", "\\.").replace("*", ".*?").replace("[", "\\[").replace("]", "\\]") + "$"
