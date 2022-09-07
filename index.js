@@ -584,21 +584,27 @@ function getEffectiveCardinality(element, resource) {
             let parent = resource.snapshot.element.filter(entry => entry.id == parentId)[0]
             
             // For complex extensions, the situation is a bit, well, complex. Say we're now at
-            // extension:foo.extension:bar This cannot contain siblings, so the check will come up empty. But when we,
+            // extension:foo.extension:bar This cannot contain siblings, so the check will come up empty. But when we
             // descend, extension:foo.extension will "polute" the siblings -- this element it is used to define a
             // discriminator but nothing else. So we'll add this path to the leafIds.
             let extMatch = elementId.match(/^(.*)\.extension:[^\.]+$/m)
             if (extMatch) {
                 leafIds.push(extMatch[1] + ".extension")
             }
-
+            
             // Get all siblings, descendants and descendants of siblings defined in the differential
             let differentialSiblings = resource.differential.element.filter(entry => (!leafIds.includes(entry.id) && entry.id.startsWith(parentId + ".")))
             let differentialSiblingIds = differentialSiblings.map(entry => entry.id)
 
-            // Get all real siblings from the snapshot
-            let siblingRegEx = new RegExp(`^${parentId}\.[^\.]+$`, "m")
-            let snapshotSiblings = resource.snapshot.element.filter(entry => (entry.id && entry.id != elementId && entry.id.match(siblingRegEx)))
+            // Get all real siblings from the snapshot. However, don't bother if we're "extension:foo.value[x]", as 
+            // it's guaranteed in this case that there are no real siblings, but in some cases there is extension
+            // metadata in the snapshot (.extension, .url, .id) that pollutes our calculation.
+            let snapshotSiblings = []
+            if (!elementId.match(/^.*\.extension:[^\.]+\.value\[x\]$/)) {
+                let siblingRegEx = new RegExp(`^${parentId}\.[^\.]+$`, "m")
+                snapshotSiblings = resource.snapshot.element.filter(entry => (entry.id && entry.id != elementId && !leafIds.includes(entry.id) && entry.id.match(siblingRegEx)))
+            }
+            
             let snapshotSiblingsMin = snapshotSiblings.reduce((min, entry) => parseInt(min) + parseInt(entry.min), 0)
 
             let min = cardinality[0]
