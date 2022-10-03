@@ -706,7 +706,7 @@ class ZibOverrides {
      * @returns {null|string} - the overridden value, if found, or the zib value as provided by zibValue otherwise.
      */
     check(resourceId, elementId, key, zibValue) {
-        if (this.overrides == null) return null
+        if (this.overrides == null) return zibValue
 
         let overridden = new Set();
         Object.keys(this.overrides).forEach(resourceRegex => {
