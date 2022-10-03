@@ -714,6 +714,13 @@ class ZibOverrides {
                 Object.keys(this.overrides[resourceRegex]).forEach(pathRegex => {
                     if (elementId.match(new RegExp(pathRegex, "m"))) {
                         this.overrides[resourceRegex][pathRegex].filter(knownIssue => key in knownIssue).forEach(knownIssue => {
+                            // Cut of the " instead of ..." part of the override value
+                            let overrideValue = knownIssue[key]
+                            let match = overrideValue.match(/(.*?)\s+instead of/)
+                            if (match) {
+                                overrideValue = match[1]
+                            }
+                                
                             if (!("reason" in knownIssue)) {
                                 console.error(`Missing reason for overriding '${key}' in ${resourceId} (${elementId})`)
                                 process.exit(1)
