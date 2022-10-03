@@ -703,9 +703,11 @@ class ZibOverrides {
      * @param {string} elementId - the id of the element
      * @param {string} key - either cardinality, datatype, alias or 
      * @param {string} zibValue - the value as expected by the zib
+     * @param {string} [concpetId] - the zib concept id which is checked. If absent, the check isn't specific for a zib
+     *                               concept.
      * @returns {null|string} - the overridden value, if found, or the zib value as provided by zibValue otherwise.
      */
-    check(resourceId, elementId, key, zibValue) {
+    check(resourceId, elementId, key, zibValue, conceptId = null) {
         if (this.overrides == null) return zibValue
 
         let overridden = new Set();
@@ -714,23 +716,25 @@ class ZibOverrides {
                 Object.keys(this.overrides[resourceRegex]).forEach(pathRegex => {
                     if (elementId.match(new RegExp(pathRegex, "m"))) {
                         this.overrides[resourceRegex][pathRegex].filter(knownIssue => key in knownIssue).forEach(knownIssue => {
-                            // Cut of the " instead of ..." part of the override value
-                            let overrideValue = knownIssue[key]
-                            let match = overrideValue.match(/(.*?)\s+instead of/)
-                            if (match) {
-                                overrideValue = match[1]
-                            }
+                            if (conceptId == null || ("for" in knownIssue && knownIssue["for"] == conceptId)) {
+                                // Cut of the " instead of ..." part of the override value
+                                let overrideValue = knownIssue[key]
+                                let match = overrideValue.match(/(.*?)\s+instead of/)
+                                if (match) {
+                                    overrideValue = match[1]
+                                }
                                 
                             if (!("reason" in knownIssue)) {
                                 console.error(`Missing reason for overriding '${key}' in ${resourceId} (${elementId})`)
                                 process.exit(1)
                             }
-                            if (knownIssue[key] == zibValue && knownIssue["require_occurence"]) {
+                                if (overrideValue == zibValue && knownIssue["require_occurence"]) {
                                 console.error(`Overridden value for ${key} on ${elementId} in ${resourceId} is the actual zib value!`)
                                 process.exit(1)
                             }
                             knownIssue["handled"] = true
-                            overridden.add(knownIssue[key])
+                                overridden.add(overrideValue)
+                            }
                         })
                     }
                 })
@@ -877,7 +881,7 @@ argv.files.forEach(filename => {
                                         if (concept.cardinality) {
                                             // Get the zib cardinality, or its overridden value.
                                             if (element.id.split(".").length != 1 && concept.stereotype[0] != "rootconcept") { // Both a FHIR root element and a zib root element cannot have another cardinality than 0..*, so skipt the zib cardinality check here
-                                                let conceptCard = zibOverrides.check(resource.id, element.id, "cardinality", concept.cardinality)
+                                                let conceptCard = zibOverrides.check(resource.id, element.id, "cardinality", concept.cardinality, mapping.map)
         
                                                 let effectiveCard = getEffectiveCardinality(element, resource)
                                                 let cardinalityIsCombined = (element.min != effectiveCard[0] || element.max != effectiveCard[1])
@@ -904,7 +908,7 @@ argv.files.forEach(filename => {
                                             fhirDt = resource.type
                                         }
                                         var isCompatible;
-                                        let conceptDt = zibOverrides.check(resource.id, element.id, "datatype", concept.datatype)
+                                        let conceptDt = zibOverrides.check(resource.id, element.id, "datatype", concept.datatype, mapping.map)
                                         if (conceptDt == fhirDt) isCompatible = IssueLevel.OK;
                                         else if (concept.datatype == 'II' && fhirDt == "Identifier") isCompatible = IssueLevel.OK;
                                         else if (concept.datatype == 'ST' && ["string", "markdown"].includes(fhirDt)) isCompatible = IssueLevel.OK;
@@ -934,7 +938,7 @@ argv.files.forEach(filename => {
                                         var tag1 = concept.tag.find(tag => tag.$.name === 'DCM::ReferencedConceptId');
                                         var tag2 = concept.tag.find(tag => tag.$.name === 'DCM::ReferencedDefinitionCode');
                                         var fhirDt = (element.type?element.type[0].code : "undefined");
-                                        let conceptDt = zibOverrides.check(resource.id, element.id, "datatype", (tag1 || tag2) ? "Reference" : concept.stereotype[0])
+                                        let conceptDt = zibOverrides.check(resource.id, element.id, "datatype", (tag1 || tag2) ? "Reference" : concept.stereotype[0], mapping.map)
                                         if (conceptDt == "Reference") {
                                             elementReport.addConceptReport("datatype", conceptDt, fhirDt, (fhirDt != "Reference") ? IssueLevel.WARNING:IssueLevel.OK)
                                         } else {
