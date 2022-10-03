@@ -45,7 +45,7 @@ const argv = yargs
         choices: ['error', 'warning'],
         default: 'error'
     }).option('zib-overrides', {
-        description: 'A YAML file specifying zib concepts that are purposefully not mapped faithfully to the profiles. This file should look like:\n\n>  [resource id]:\n>    zib deviations:\n>      [element id]:\n>        - [deviation]: [value]{instead of [expected value]}\n>          {for: zib concept id}\n>          reason: [Explanation for deviation]\n>  unmapped zib concepts:\n>    - [zib concept id]: [zib concept name]\n>      reason: [Explanation for not mapping]\n\nWhere [deviation] can be "cardinality", "datatype", "short" or "alias". The deviation is specified as the value which is found in the FHIR resource -- for readability, it is possible to append this with the string "instead of .." to specify the value which would be expected from the zib. For each element, multiple different deviations may be specified. The optional "for" key allows to specify, per deviation, to which element it applies (this is useful for when there are multiple mappings to a single FHIR element with conflicting specifications). Note that for each deviation, a reason *must* be provided.\nMultiple documents may be present in the YAML file. This flag may also be used multiple times to specify more than one YAML file.',
+        description: 'A YAML file specifying zib concepts that are purposefully not mapped faithfully to the profiles. This file should look like:\n\n>  [resource id]:\n>    zib deviations:\n>      [element id]:\n>        - [deviation]: [value]{ instead of [expected value]}\n>          {for: zib concept id}\n>          reason: [Explanation for deviation]\n>  unmapped zib concepts:\n>    - [zib concept id]: [zib concept name]\n>      reason: [Explanation for not mapping]\n\nWhere [deviation] can be "cardinality", "datatype", "short" or "alias". The deviation is specified as the value which is found in the FHIR resource -- for readability, it is possible to append this with the string "instead of .." to specify the value which would be expected from the zib. For each element, multiple different deviations may be specified. The optional "for" key allows to specify, per deviation, to which element it applies (this is useful for when there are multiple mappings to a single FHIR element with conflicting specifications). Note that for each deviation, a reason *must* be provided.\nMultiple documents may be present in the YAML file. This flag may also be used multiple times to specify more than one YAML file.',
         type: 'string'
     }).option('output-format', {
         alias: 'f',
@@ -716,7 +716,7 @@ class ZibOverrides {
                 Object.keys(this.overrides[resourceRegex]).forEach(pathRegex => {
                     if (elementId.match(new RegExp(pathRegex, "m"))) {
                         this.overrides[resourceRegex][pathRegex].filter(knownIssue => key in knownIssue).forEach(knownIssue => {
-                            if (conceptId == null || ("for" in knownIssue && knownIssue["for"] == conceptId)) {
+                            if ((!("for" in knownIssue) || knownIssue["for"].startsWith(conceptId + " "))) {
                                 // Cut of the " instead of ..." part of the override value
                                 let overrideValue = knownIssue[key]
                                 let match = overrideValue.match(/(.*?)\s+instead of/)
@@ -724,15 +724,15 @@ class ZibOverrides {
                                     overrideValue = match[1]
                                 }
                                 
-                            if (!("reason" in knownIssue)) {
-                                console.error(`Missing reason for overriding '${key}' in ${resourceId} (${elementId})`)
-                                process.exit(1)
-                            }
+                                if (!("reason" in knownIssue)) {
+                                    console.error(`Missing reason for overriding '${key}' in ${resourceId} (${elementId})`)
+                                    process.exit(1)
+                                }
                                 if (overrideValue == zibValue && knownIssue["require_occurence"]) {
-                                console.error(`Overridden value for ${key} on ${elementId} in ${resourceId} is the actual zib value!`)
-                                process.exit(1)
-                            }
-                            knownIssue["handled"] = true
+                                    console.error(`Overridden value for ${key} on ${elementId} in ${resourceId} is the actual zib value!`)
+                                    process.exit(1)
+                                }
+                                knownIssue["handled"] = true
                                 overridden.add(overrideValue)
                             }
                         })
