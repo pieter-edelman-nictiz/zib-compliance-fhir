@@ -943,7 +943,8 @@ argv.files.forEach(filename => {
                                             elementReport.addConceptReport("datatype", conceptDt, fhirDt, (fhirDt != "Reference") ? IssueLevel.WARNING:IssueLevel.OK)
                                         } else {
                                             let isCompatible;
-                                            if (fhirDt == "Extension") isCompatible = IssueLevel.WARNING;
+                                            if (conceptDt == fhirDt) isCompatible = IssueLevel.OK;
+                                            else if (fhirDt == "Extension") isCompatible = IssueLevel.WARNING;
                                             else if (conceptDt == 'container' && fhirDt == "Reference") isCompatible = IssueLevel.OK;
                                             else if (conceptDt == 'container' && fhirDt == "undefined") isCompatible = IssueLevel.OK;
                                             else if (conceptDt == 'container' && fhirDt == "BackboneElement") isCompatible = IssueLevel.OK;
