@@ -5,6 +5,7 @@ var fs = require('fs');
 var xml2js = require('xml2js');
 const yaml = require('js-yaml');
 const yargs = require('yargs');
+const path = require('path');
 
 // Unique identification string for when mappings are implicit, as described in the profiling guidelines.
 const IMPLICIT_IDENTIFIER    = ' (implicit, main mapping is on '
@@ -326,12 +327,12 @@ class ProfileReport {
     _formatText() {
         let output = new Output()
 
-        output.addLine(`==== ${this.filename}`)
+        output.addLine(`==== ${path.posix.basename(this.filename, ".json")}`)
         this.reports.forEach(report => {
             if (report instanceof ElementReport) {
                 let outputForElement = report.format("text")
                 if (outputForElement.hasLines()) {
-                    output.addLine(`     == ${report.conceptId} (${report.fhirPath})`)
+                    output.addLine(`     == ${report.conceptId} (mapped on ${report.fhirPath})`)
                     output.addOutput(outputForElement)
                 }
             } else if (report instanceof Issue) {
@@ -503,7 +504,7 @@ class ConceptReport extends AbstractIssue {
     _formatText() {
         let output = new Output()
         if (this.level != IssueLevel.OK) {
-            output.addLine("        " + (this.type + ":").padEnd(13) + this.formattedLevel + ` (${this.actual} instead of ${this.expected})`)
+            output.addLine("        " + (this.type + ":").padEnd(13) + this.formattedLevel + ` (found ${this.actual} instead of ${this.expected})`)
         }
         return output
     }
