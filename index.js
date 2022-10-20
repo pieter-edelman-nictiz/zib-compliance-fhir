@@ -512,46 +512,46 @@ class ConceptReport extends AbstractIssue {
 
 // create zib concept indexes
 // only add objects that have a DCM::ConceptId
-var _packageByConceptId = []; // package id by conceptid
+// var _packageByConceptId = []; // package id by conceptid
 var _conceptsById = []; // object by conceptid
-zibs.model.objects[0].object.forEach(object => {
-    if (object.parentId && object.tag) {
-        var tag = object.tag.find(tag => tag.$.name === 'DCM::ConceptId');
-        if (!tag) {
-            // this is possibly an "old" zib with conceptid in definitioncode
-            tag = object.tag.find(tag => tag.$.name === 'DCM::DefinitionCode' && tag.$.value.startsWith("NL-CM:"));
-        }
-        if (tag) {
-            var zibId = tag.$.value;
-            _packageByConceptId[zibId] = object.parentId;
-            _conceptsById[zibId] = object;
 
-            // relationship type = Generalization ; sourceId = zibId map destId
-            var relDt = zibs.model.relationships[0].relationship.find(relationship => relationship.type[0] === "Generalization" && relationship.sourceId[0] == object.id);
-            if (relDt) {
-                object.datatype = datatypes[relDt.destId];
+const CONCEPT_ROOT = "2.16.840.1.113883.2.4.3.11.60.40.1."
+const REF_ROOT     = "2.16.840.1.113883.2.4.3.11.60.121.2."
+function walkDatasetConcept(concept, is_rootconcept = false) {
+    if (concept['$'].id.startsWith(CONCEPT_ROOT)) {
+        let zibId = concept['$'].id.replace(CONCEPT_ROOT, "NL-CM:")
+        _conceptsById[zibId] = concept
+        _conceptsById[zibId].is_rootconcept = is_rootconcept
+        concept.name.forEach(name => {
+            switch(name['$']['language']) {
+                case 'nl-NL':
+                    _conceptsById[zibId].alias = name['_']
+                    break;
+                case 'en-US':
+                    _conceptsById[zibId].short = name['_']
+                    break;
             }
+        })
+    }
+    if ('concept' in concept) {
+        concept.concept.forEach(concept => walkDatasetConcept(concept, false))
+    }
+}
+zibs.decor.datasets[0].dataset.forEach(dataset => walkDatasetConcept(dataset.concept[0], true))
 
-            // relationship typ = Aggregation ; sourfeId = zibId sourceCard
-            var relCard = zibs.model.relationships[0].relationship.find(relationship => relationship.type[0] === "Aggregation" && relationship.sourceId[0] == object.id);
-            if (!relCard || relCard.sourceCard == '') {
-                // when no cardinality specified default
-                object.cardinality = "0..1";
-            }
-            else if (relCard) {
-                var card = relCard.sourceCard[0];
-                if (card == "1") card = "1..1";
-                
-                // Zibs define a "conceptual" cardinality, meaning that they define the concepts that are conceptually
-                // present, although in practice they may be absent in practical use cases. To facilitate this, the
-                // FHIR min cardinality for zib profiles must always be zero. See 
-                // https://zibs.nl/wiki/Zib_kardinaliteiten for more information. 
-                let minAndMax = card.split("..");
-                object.cardinality = `0..${minAndMax[1]}`;
-            }
+function walkScenarioConcept(concept) {
+    if (concept['$'].ref.startsWith(CONCEPT_ROOT)) {
+        let zibId = concept['$'].ref.replace(CONCEPT_ROOT, "NL-CM:")
+        
+        if (zibId in _conceptsById) {
+            _conceptsById[zibId].min = concept['$'].minimumMultiplicity
+            _conceptsById[zibId].max = concept['$'].maximumMultiplicity
         }
     }
-});
+}
+zibs.decor.scenarios[0].scenario.forEach(scenario => {
+    scenario.transaction[0].transaction[0].representingTemplate[0].concept.forEach(concept => walkScenarioConcept(concept))
+})
 
 /**
  * Try to calculate the effective cardinality of en element, that is, the min and max values of this element multiplied
@@ -856,33 +856,32 @@ argv.files.forEach(filename => {
                                         profileReport.addIssue(`unknown concept ${mapping.map}`, IssueLevel.ERROR)
                                         return;
                                     }
-
                                     if (mapping.comment.startsWith(REVERSE_REF_IDENTIFIER)) {
                                         // If the mapping documents a reference that in FHIR points in the opposite
                                         // direction of what the zib specifies, short and alias should be set to the
                                         // target of the reference.
                                         let rootconcept = _conceptsById[getCMPrefix(mapping.map) + ".1"]
-                                        conceptNameEN = zibOverrides.check(resource.id, element.id, "short", rootconcept.alias[0].substring(3).trim())
-                                        conceptNameNL = zibOverrides.check(resource.id, element.id, "alias", rootconcept.name[0])
+                                        conceptNameEN = zibOverrides.check(resource.id, element.id, "short", rootconcept.alias)
+                                        conceptNameNL = zibOverrides.check(resource.id, element.id, "alias", rootconcept.short)
                                     } else {
                                         if (conceptNameEN == null) {
                                             let conceptNames = [];
                                             element.mapping.forEach(mapping => {
                                                 if (zibRegEx.test(mapping.identity)) {
-                                                    // Cut of "EN: ", and cut off the part after "::" if it is a reference
-                                                    let conceptName = _conceptsById[mapping.map].alias[0].substring(3).trim().split("::")[0]
+                                                    // Cut of "EN: ", cut off the part after "::" if it is a reference
+                                                    let conceptName = _conceptsById[mapping.map].short.split("::")[0]
                                                     conceptNames.push(conceptName)
                                                 }
                                             })
                                             conceptNameEN = [...new Set(conceptNames)].join(" / ")
                                         }
                                         conceptNameEN = zibOverrides.check(resource.id, element.id, "short", conceptNameEN)
-                                        conceptNameNL = zibOverrides.check(resource.id, element.id, "alias", concept.name.toString().split("::")[0]) // Cut of the part after "::" if it is a reference
+                                        conceptNameNL = zibOverrides.check(resource.id, element.id, "alias", concept.alias.split("::")[0]) // Cut of the part after "::" if it is a reference
 
-                                        if (concept.cardinality) {
+                                        if (concept.min && concept.max) {
                                             // Get the zib cardinality, or its overridden value.
-                                            if (element.id.split(".").length != 1 && concept.stereotype[0] != "rootconcept") { // Both a FHIR root element and a zib root element cannot have another cardinality than 0..*, so skipt the zib cardinality check here
-                                                let conceptCard = zibOverrides.check(resource.id, element.id, "cardinality", concept.cardinality, mapping.map)
+                                            if (element.id.split(".").length != 1 && concept.is_rootconcept) { // Both a FHIR root element and a zib root element cannot have another cardinality than 0..*, so skip the zib cardinality check here
+                                                let conceptCard = zibOverrides.check(resource.id, element.id, "cardinality", `${concept.min}..${concept.max}`, mapping.map)
         
                                                 let effectiveCard = getEffectiveCardinality(element, resource)
                                                 let cardinalityIsCombined = (element.min != effectiveCard[0] || element.max != effectiveCard[1])
@@ -901,7 +900,7 @@ argv.files.forEach(filename => {
                                     elementReport.addConceptReport("short", conceptNameEN, fhirShort, (conceptNameEN != fhirShort) ? IssueLevel.WARNING : IssueLevel.OK)
                                     elementReport.addConceptReport("alias", conceptNameNL, fhirAlias, (fhirAlias.indexOf(conceptNameNL) == -1) ? IssueLevel.WARNING : IssueLevel.OK)
 
-                                    if (concept.datatype) {
+                                    if (concept.valueDomain) {
                                         let fhirDt = undefined;
                                         if (element.type) {
                                             fhirDt = element.type[0].code
@@ -909,54 +908,35 @@ argv.files.forEach(filename => {
                                             fhirDt = resource.type
                                         }
                                         var isCompatible;
-                                        let conceptDt = zibOverrides.check(resource.id, element.id, "datatype", concept.datatype, mapping.map)
+                                        let conceptDt = zibOverrides.check(resource.id, element.id, "datatype", concept.valueDomain[0]['$'].type, mapping.map)
                                         if (conceptDt == fhirDt) isCompatible = IssueLevel.OK;
-                                        else if (concept.datatype == 'II' && fhirDt == "Identifier") isCompatible = IssueLevel.OK;
-                                        else if (concept.datatype == 'ST' && ["string", "markdown"].includes(fhirDt)) isCompatible = IssueLevel.OK;
-                                        else if (concept.datatype == 'ST' && fhirDt == "Annotation") isCompatible = IssueLevel.OK;
-                                        else if (concept.datatype == 'PQ' && fhirDt == "Duration") isCompatible = IssueLevel.OK;
-                                        else if (concept.datatype == 'PQ' && fhirDt == "Quantity") isCompatible = IssueLevel.OK;
-                                        else if (concept.datatype == 'PQ' && fhirDt == "integer") isCompatible = IssueLevel.WARNING; // what is the unit?
-                                        else if (concept.datatype == 'PQ' && fhirDt == "decimal") isCompatible = IssueLevel.WARNING; // what is the unit?
-                                        else if (concept.datatype == 'CD' && fhirDt == "CodeableConcept") isCompatible = IssueLevel.OK;
-                                        else if (concept.datatype == 'CD' && fhirDt == "code") isCompatible = IssueLevel.OK;
-                                        else if (concept.datatype == 'CD' && fhirDt == "Coding") isCompatible = IssueLevel.OK;
-                                        else if (concept.datatype == 'CD' && fhirDt == "string") isCompatible = IssueLevel.WARNING; // what is the codesystem
-                                        else if (concept.datatype == 'CO' && fhirDt == "Coding") isCompatible = IssueLevel.OK;
-                                        else if (concept.datatype == 'CO' && fhirDt == "CodeableConcept") isCompatible = IssueLevel.OK;
-                                        else if (concept.datatype == 'TS' && fhirDt == "dateTime") isCompatible = IssueLevel.OK;
-                                        else if (concept.datatype == 'TS' && fhirDt == "date") isCompatible = IssueLevel.OK;
-                                        else if (concept.datatype == 'TS' && fhirDt == "Period") isCompatible = IssueLevel.ERROR;
-                                        else if (concept.datatype == 'BL' && fhirDt == "boolean") isCompatible = IssueLevel.OK;
-                                        else if (concept.datatype == 'INT' && fhirDt == "integer") isCompatible = IssueLevel.OK;
-                                        else if (concept.datatype == 'INT' && fhirDt == "Quantity") isCompatible = IssueLevel.WARNING; // what is the unit?
-                                        else if (concept.datatype == 'ED' && fhirDt == "base64Binary") isCompatible = IssueLevel.OK;
-                                        else if (concept.datatype == 'ED' && fhirDt == "Attachment") isCompatible = IssueLevel.OK;
+                                        else if (conceptDt == 'identifier' && fhirDt == "Identifier") isCompatible = IssueLevel.OK;
+                                        else if (conceptDt == 'string' && ["string", "markdown"].includes(fhirDt)) isCompatible = IssueLevel.OK;
+                                        else if (conceptDt == 'string' && fhirDt == "Annotation") isCompatible = IssueLevel.OK;
+                                        else if (conceptDt == 'quantity' && fhirDt == "Duration") isCompatible = IssueLevel.OK;
+                                        else if (conceptDt == 'quantity' && fhirDt == "Quantity") isCompatible = IssueLevel.OK;
+                                        else if (conceptDt == 'quantity' && fhirDt == "integer") isCompatible = IssueLevel.WARNING; // what is the unit?
+                                        else if (conceptDt == 'quantity' && fhirDt == "decimal") isCompatible = IssueLevel.WARNING; // what is the unit?
+                                        else if (conceptDt == 'code' && fhirDt == "CodeableConcept") isCompatible = IssueLevel.OK;
+                                        else if (conceptDt == 'code' && fhirDt == "code") isCompatible = IssueLevel.OK;
+                                        else if (conceptDt == 'code' && fhirDt == "Coding") isCompatible = IssueLevel.OK;
+                                        else if (conceptDt == 'code' && fhirDt == "string") isCompatible = IssueLevel.WARNING; // what is the codesystem
+                                        else if (conceptDt == 'CO' && fhirDt == "Coding") isCompatible = IssueLevel.OK;
+                                        else if (conceptDt == 'CO' && fhirDt == "CodeableConcept") isCompatible = IssueLevel.OK;
+                                        else if (conceptDt == 'datetime' && fhirDt == "dateTime") isCompatible = IssueLevel.OK;
+                                        else if (conceptDt == 'datetime' && fhirDt == "date") isCompatible = IssueLevel.OK;
+                                        else if (conceptDt == 'TS' && fhirDt == "Period") isCompatible = IssueLevel.ERROR;
+                                        else if (conceptDt == 'BL' && fhirDt == "boolean") isCompatible = IssueLevel.OK;
+                                        else if (conceptDt == 'count' && fhirDt == "integer") isCompatible = IssueLevel.OK;
+                                        else if (conceptDt == 'count' && fhirDt == "Quantity") isCompatible = IssueLevel.WARNING; // what is the unit?
+                                        else if (conceptDt == 'ED' && fhirDt == "base64Binary") isCompatible = IssueLevel.OK;
+                                        else if (conceptDt == 'ED' && fhirDt == "Attachment") isCompatible = IssueLevel.OK;
                                         else if (fhirDt == "Extension") isCompatible = IssueLevel.WARNING;
                                         else isCompatible = IssueLevel.ERROR;
-                                        elementReport.addConceptReport("datatype", concept.datatype, fhirDt, isCompatible)
-                                    } else {
-                                        var tag1 = concept.tag.find(tag => tag.$.name === 'DCM::ReferencedConceptId');
-                                        var tag2 = concept.tag.find(tag => tag.$.name === 'DCM::ReferencedDefinitionCode');
-                                        var fhirDt = (element.type?element.type[0].code : "undefined");
-                                        let conceptDt = zibOverrides.check(resource.id, element.id, "datatype", (tag1 || tag2) ? "Reference" : concept.stereotype[0], mapping.map)
-                                        if (conceptDt == "Reference") {
-                                            elementReport.addConceptReport("datatype", conceptDt, fhirDt, (fhirDt != "Reference") ? IssueLevel.WARNING:IssueLevel.OK)
-                                        } else {
-                                            let isCompatible;
-                                            if (conceptDt == fhirDt) isCompatible = IssueLevel.OK;
-                                            else if (fhirDt == "Extension") isCompatible = IssueLevel.WARNING;
-                                            else if (conceptDt == 'container' && fhirDt == "Reference") isCompatible = IssueLevel.OK;
-                                            else if (conceptDt == 'container' && fhirDt == "undefined") isCompatible = IssueLevel.OK;
-                                            else if (conceptDt == 'container' && fhirDt == "BackboneElement") isCompatible = IssueLevel.OK;
-                                            else if (conceptDt == 'rootconcept' && fhirDt == "undefined") isCompatible = IssueLevel.OK;
-                                            else if (conceptDt == 'rootconcept' && fhirDt != "undefined") isCompatible = IssueLevel.WARNING;
-                                            else if (conceptDt == fhirDt) isCompatible = IssueLevel.OK; // When the datatype is manually overridden
-                                            else isCompatible = IssueLevel.ERROR;
-                                            elementReport.addConceptReport("datatype", conceptDt, fhirDt, isCompatible)
-                                        }
+                                        elementReport.addConceptReport("datatype", conceptDt, fhirDt, isCompatible)
+                                    } else if (concept['$'].type != 'group') {
+                                        console.log("Datetype couldn't be determined")
                                     }
-
                                     profileReport.addElementReport(elementReport)
                                 }
                             });
@@ -988,13 +968,12 @@ if (argv["check-missing"] != "none") {
             if (!(_conceptsById[zibId].stereotype == "container" || _conceptsById[zibId].stereotype == "rootconcept" || zibOverrides.hasUnmapped(zibId))) {
                 
                 if (argv["check-missing"] == "all" || (argv["check-missing"] == "mapped-only" && cmPrefixesMapped.has(getCMPrefix(zibId)))) {
-                    // find rootconcept with this concept
-                    let parentId = _conceptsById[zibId].parentId;
-                    let rootconcept = zibs.model.objects[0].object.find(obj => obj.stereotype == "rootconcept" && obj.parentId[0] == parentId[0]);
+                    let rootconceptId = zibId.replace(/^(.*)\.[0-9]+$/, "$1.1")
+                    let rootconcept = _conceptsById[rootconceptId]
                     if (rootconcept) {
                         report.addIssue("not mapped " + rootconcept.name + "." + _conceptsById[zibId].name + " " + zibId, IssueLevel.WARNING)
                     } else {
-                        report.addIssue("not mapped ???." + _conceptsById[zibId].name + " " + zibId, IssueLevel.WARNING)
+                        report.addIssue("not mapped ???." + _conceptsById[zibId].short + " " + zibId, IssueLevel.WARNING)
                     }
                 }
             }
