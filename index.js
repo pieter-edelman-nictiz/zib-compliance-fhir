@@ -46,7 +46,7 @@ const argv = yargs
         choices: ['error', 'warning'],
         default: 'error'
     }).option('zib-overrides', {
-        description: 'A YAML file specifying zib concepts that are purposefully not mapped faithfully to the profiles. This file should look like:\n\n>  [resource id]:\n>    zib deviations:\n>      [element id]:\n>        - [deviation]: [value]{ instead of [expected value]}\n>          {for: zib concept id}\n>          reason: [Explanation for deviation]\n>  unmapped zib concepts:\n>    - [zib concept id]: [zib concept name]\n>      reason: [Explanation for not mapping]\n\nWhere [deviation] can be "cardinality", "datatype", "short" or "alias". The deviation is specified as the value which is found in the FHIR resource -- for readability, it is possible to append this with the string "instead of .." to specify the value which would be expected from the zib. For each element, multiple different deviations may be specified. The optional "for" key allows to specify, per deviation, to which element it applies (this is useful for when there are multiple mappings to a single FHIR element with conflicting specifications). Note that for each deviation, a reason *must* be provided.\nMultiple documents may be present in the YAML file. This flag may also be used multiple times to specify more than one YAML file.',
+        description: 'A YAML file specifying zib concepts that are purposefully not mapped faithfully to the profiles. This file should look like:\n\n>  [resource id]:\n>    zib deviations:\n>      [element id]:\n>        - [deviation]: [value]{ instead of [expected value]}\n>          {for: zib concept id}\n>          reason: [Explanation for deviation]\n>  unmapped zib concepts:\n>    - [zib concept id]: [zib concept name]\n>      reason: [Explanation for not mapping]\n>  undefined zib concepts:\n>    - concept id: [zib concept id]\n>    - name EN: [Englisht concept name]\n>    - name NL: [Dutch concept name]\n>    - datatype: [zib datatype]\n>    - cardinality: [cardinality]\n>    - reason: [Explanation for adding]\n\nWhere [deviation] can be "cardinality", "datatype", "short" or "alias". The deviation is specified as the value which is found in the FHIR resource -- for readability, it is possible to append this with the string "instead of .." to specify the value which would be expected from the zib. For each element, multiple different deviations may be specified. The optional "for" key allows to specify, per deviation, to which element it applies (this is useful for when there are multiple mappings to a single FHIR element with conflicting specifications). Note that for each deviation, a reason *must* be provided.\nMultiple documents may be present in the YAML file. This flag may also be used multiple times to specify more than one YAML file.',
         type: 'string'
     }).option('output-format', {
         alias: 'f',
@@ -674,6 +674,39 @@ class ZibOverrides {
                     this.unmapped_concepts[key] = unmapped
                 })
                 delete overrides["unmapped zib concepts"]
+            }
+            if ("undefined zib concepts" in overrides) {
+                overrides["undefined zib concepts"].forEach(unknown => {
+                    if (!("concept id" in unknown && "name NL" in unknown && "name EN" in unknown && "datatype" in unknown && "cardinality" in unknown)) {
+                        console.error("When definining new zib concepts, you need to specify all of the keys 'concept id', 'name NL', 'name EN', 'datatype' and 'cardinality'!")
+                        process.exit(1)
+                    }
+                    if (unknown.conceptId in _conceptsById) {
+                        console.error(`Concept with id ${unknown["concept id"]} was defined as an override, but it is already known from the max file`)
+                        process.exit(1)
+                    }
+                    if (!("reason" in unknown)) {
+                        console.error(`You must specify a reason for defining new zib concepts, but none was provided for zib concept ${unknown["concept id"]}`)
+                        process.exit(1)
+                    }
+
+                    // The newly defined zib concept in the file with zib overrides is simply added to the global
+                    // _conceptsById map, in the form expected by the application.
+                    let concept = {}
+                    concept["tag"] = [
+                        { "$": {
+                            "name": "DCM:ConceptId",
+                            "value": unknown["concept id"]
+                        }}
+                    ]
+                    concept["stereotype"] = "data"
+                    concept["name"] = [unknown["name NL"]]
+                    concept["alias"] = ['EN: ' + unknown["name EN"]]
+                    concept["datatype"] = unknown["datatype"]
+                    concept["cardinality"] = unknown["cardinality"]
+                    _conceptsById[unknown["concept id"]] = concept
+                })
+                delete overrides["unknown zib concepts"]
             }
             Object.keys(overrides).forEach(resource_id => {
                 if ("zib deviations" in overrides[resource_id]) {
