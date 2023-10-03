@@ -895,8 +895,8 @@ argv.files.forEach(filename => {
                                         // direction of what the zib specifies, short and alias should be set to the
                                         // target of the reference.
                                         let rootconcept = _conceptsById[getCMPrefix(mapping.map) + ".1"]
-                                        conceptNameEN = zibOverrides.check(resource.id, element.id, "short", rootconcept.alias[0].substring(3).trim())
-                                        conceptNameNL = zibOverrides.check(resource.id, element.id, "alias", rootconcept.name[0])
+                                        conceptNameEN = zibOverrides.check(resource.id, element.id, "short", rootconcept.alias[0].substring(3).trim(), mapping.map)
+                                        conceptNameNL = zibOverrides.check(resource.id, element.id, "alias", rootconcept.name[0], mapping.map)
                                     } else {
                                         if (conceptNameEN == null) {
                                             let conceptNames = [];
@@ -909,8 +909,8 @@ argv.files.forEach(filename => {
                                             })
                                             conceptNameEN = [...new Set(conceptNames)].join(" / ")
                                         }
-                                        conceptNameEN = zibOverrides.check(resource.id, element.id, "short", conceptNameEN)
-                                        conceptNameNL = zibOverrides.check(resource.id, element.id, "alias", concept.name.toString().split("::")[0]) // Cut of the part after "::" if it is a reference
+                                        conceptNameEN = zibOverrides.check(resource.id, element.id, "short", conceptNameEN, mapping.map)
+                                        conceptNameNL = zibOverrides.check(resource.id, element.id, "alias", concept.name.toString().split("::")[0], mapping.map) // Cut of the part after "::" if it is a reference
 
                                         if (concept.cardinality) {
                                             // Get the zib cardinality, or its overridden value.
