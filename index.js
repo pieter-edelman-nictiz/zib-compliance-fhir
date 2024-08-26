@@ -23,7 +23,7 @@ const argv = yargs
         alias: 'z',
         description: 'The zib release to check mappings for',
         type: 'string',
-        choices: ['2017', '2020'],
+        choices: ['2017', '2020', '2024'],
         demandOption: true
     })
     .option('fhir-version', {
