@@ -85,20 +85,6 @@ xmlParser.parseString(max, function (err, result) {
     zibs = result;
 });
 
-// relationship with sourceId = id, targetId = datatypeid, type=Generalization
-var datatypes = {
-    7887: "TS",
-    7906: "CD",
-    7895: "ST",
-    7891: "PQ",
-    7892: "BL",
-    7888: "INT",
-    7886: "CO",
-    7885: "ED",
-    7889: "II",
-    7903: "ANY"
-};
-
 /** 
  * The graveness that a detected issue may have.
  */
@@ -509,6 +495,11 @@ class ConceptReport extends AbstractIssue {
         return output
     }
 }
+
+// The data types used are defined as objects with "stereotype" set to "datatype". The zib concepts use the id of these
+// data type objects to define which data type they are, so here we make a mapping between data type id and name.
+var datatypes = {}
+zibs.model.objects[0].object.filter(o => o.stereotype == 'datatype').map(o => datatypes[o.id] = o.name[0])
 
 // create zib concept indexes
 // only add objects that have a DCM::ConceptId
