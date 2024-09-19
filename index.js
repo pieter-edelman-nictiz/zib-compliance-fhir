@@ -389,7 +389,7 @@ class AbstractIssue {
     /**
      * Return statistics about the number of issues detected.
      * @returns {Object} - Object containing the IssueLevel levels "ok", "warning" and "error" with the total 
-     *                     succesfull checks, detected warnings and detected errors respectively.
+     *                     successful checks, detected warnings and detected errors respectively.
      */
     getStatistics() {
         if (this.level == IssueLevel.OK) {
@@ -922,7 +922,11 @@ argv.files.forEach(filename => {
                                         }
                                     }
 
-                                    elementReport.addConceptReport("short", conceptNameEN, fhirShort, (conceptNameEN != fhirShort) ? IssueLevel.WARNING : IssueLevel.OK)
+                                    // For comparison, all English concept names should be present in the short, but
+                                    // we don't care much about the order, so we do a comparison on sorted versions.
+                                    orderedShort         = fhirShort.split(' / ').toSorted().join(' / ')
+                                    orderedConceptNameEN = conceptNameEN.split(' / ').toSorted().join(' / ')
+                                    elementReport.addConceptReport("short", conceptNameEN, fhirShort, (orderedConceptNameEN != orderedShort) ? IssueLevel.WARNING : IssueLevel.OK)
                                     elementReport.addConceptReport("alias", conceptNameNL, fhirAlias, (fhirAlias.indexOf(conceptNameNL) == -1) ? IssueLevel.WARNING : IssueLevel.OK)
 
                                     if (concept.datatype) {
