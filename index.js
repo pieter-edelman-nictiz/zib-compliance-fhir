@@ -924,8 +924,8 @@ argv.files.forEach(filename => {
 
                                     // For comparison, all English concept names should be present in the short, but
                                     // we don't care much about the order, so we do a comparison on sorted versions.
-                                    orderedShort         = fhirShort.split(' / ').toSorted().join(' / ')
-                                    orderedConceptNameEN = conceptNameEN.split(' / ').toSorted().join(' / ')
+                                    orderedShort         = Array.from(fhirShort.split(' / ').sort()).join(' / ')
+                                    orderedConceptNameEN = Array.from(conceptNameEN.split(' / ').sort()).join(' / ')
                                     elementReport.addConceptReport("short", conceptNameEN, fhirShort, (orderedConceptNameEN != orderedShort) ? IssueLevel.WARNING : IssueLevel.OK)
                                     elementReport.addConceptReport("alias", conceptNameNL, fhirAlias, (fhirAlias.indexOf(conceptNameNL) == -1) ? IssueLevel.WARNING : IssueLevel.OK)
 
